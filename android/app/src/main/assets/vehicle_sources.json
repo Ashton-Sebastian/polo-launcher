@@ -1,0 +1,28 @@
+{
+  "_readme": [
+    "Tells the launcher where your head unit publishes car data (fuel, range, trip computer).",
+    "Every head unit / CAN-bus decoder does this differently, so this file is filled in once we",
+    "know which app on YOUR unit reads the CAN bus (see Launcher > Diagnostics on the unit).",
+    "Each broadcast entry: the intent action the vendor app sends, and which extra holds which value.",
+    "Field names the launcher understands: fuel_litres, fuel_percent, range_km, temp_c,",
+    "ss_distance_km, ss_time_min, ss_consumption_kml, ss_consumption_l100, ss_avg_speed_kmh (since start),",
+    "rf_... the same five fields for since refuelling,",
+    "lt_distance_km, lt_time_min, lt_consumption_kml, lt_consumption_l100, lt_avg_speed_kmh.",
+    "'scale' multiplies the raw value (e.g. 0.1 if the unit sends tenths)."
+  ],
+  "broadcasts": [
+    {
+      "enabled": false,
+      "action": "com.example.canbus.ACTION_CAR_INFO",
+      "fields": {
+        "fuel_litres":        { "extra": "oil_remain",  "scale": 1 },
+        "range_km":           { "extra": "mileage_remain", "scale": 1 },
+        "temp_c":             { "extra": "out_temp",    "scale": 0.5 },
+        "ss_distance_km":     { "extra": "start_mileage", "scale": 0.1 },
+        "ss_time_min":        { "extra": "start_time",  "scale": 1 },
+        "ss_consumption_l100":{ "extra": "start_oil",   "scale": 0.1 },
+        "ss_avg_speed_kmh":   { "extra": "start_speed", "scale": 1 }
+      }
+    }
+  ]
+}

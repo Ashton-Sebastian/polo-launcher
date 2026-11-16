@@ -1,0 +1,201 @@
+/* Polo 6R launcher – designed on a 1280x720 canvas, scaled to fit the head unit screen */
+:root{
+  --navy-0:#02112e;
+  --navy-1:#05235a;
+  --blue-2:#0b4fa3;
+  --blue-3:#1a7fcf;
+  --cyan:#3fd6ee;
+  --white:#ffffff;
+  --text-dim:rgba(255,255,255,.82);
+  --amber:#ffb020;
+  --red:#ff4d4d;
+  --tile:rgba(6,20,52,.74);
+  --tile-hi:rgba(118,160,255,.42);
+  --rail:rgba(214,224,255,.22);
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html,body{width:100%;height:100%;overflow:hidden;background:var(--navy-0);
+  font-family:"VW Text","VW Head",Roboto,"Segoe UI","Helvetica Neue",Arial,sans-serif;color:var(--white);
+  -webkit-user-select:none;user-select:none;touch-action:none}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+
+#stage{position:absolute;left:50%;top:50%;width:1280px;height:720px;transform-origin:center center;overflow:hidden}
+.bg{position:absolute;top:0;right:0;bottom:0;left:0;
+  background:
+    radial-gradient(ellipse 62% 70% at 56% 56%, rgba(64,190,240,.55) 0%, rgba(30,130,215,.35) 30%, rgba(0,0,0,0) 62%),
+    radial-gradient(ellipse 120% 110% at 55% 55%, var(--blue-3) 0%, var(--blue-2) 34%, var(--navy-1) 66%, var(--navy-0) 100%)}
+
+.ic{display:inline-flex;align-items:center;justify-content:center}
+.ic svg{width:100%;height:100%}
+
+/* ---------- side rail ---------- */
+.rail{position:absolute;left:18px;top:30px;bottom:30px;width:96px;border-radius:24px;background:var(--rail);
+  display:flex;flex-direction:column;justify-content:space-between;align-items:center;padding:26px 0 22px;
+  box-shadow:inset 0 0 0 1px rgba(255,255,255,.10)}
+.rail button{width:72px;height:72px;border-radius:18px;display:flex;align-items:center;justify-content:center}
+.rail button svg{width:46px;height:46px}
+.rail button:active{background:rgba(255,255,255,.18)}
+.rail .gridbtn svg{width:52px;height:30px}
+
+.handle{position:absolute;left:calc(50% + 59px);top:44px;width:50px;height:5px;margin-left:-25px;border-radius:3px;background:rgba(255,255,255,.9)}
+
+/* ---------- status ---------- */
+.status{position:absolute;right:30px;top:22px;height:56px;display:flex;align-items:center;font-size:28px;font-weight:700}
+.status .bt{width:24px;height:30px}
+.status .temp{font-size:24px;font-weight:500;color:var(--text-dim)}
+.fuelchip{display:flex;align-items:center;font-size:22px;font-weight:600;padding:6px 12px;border-radius:14px;background:rgba(0,16,48,.32)}
+.fuelchip .ic{width:22px;height:26px}
+.fuelchip .mini{width:58px;height:10px;border-radius:5px;background:rgba(255,255,255,.22);overflow:hidden}
+.fuelchip .mini i{display:block;height:100%;width:0;background:var(--cyan);border-radius:5px;transition:width .6s}
+.fuelchip.low .mini i{background:var(--amber)} .fuelchip.low{color:var(--amber)}
+
+/* ---------- screens ---------- */
+main{position:absolute;left:118px;right:0;top:0;bottom:0}
+.screen{position:absolute;top:0;right:0;bottom:0;left:0;opacity:0;visibility:hidden;pointer-events:none;transition:opacity .25s ease,visibility 0s linear .25s}
+.screen.active{opacity:1;visibility:visible;pointer-events:auto;transition-delay:0s}
+
+/* ---------- home ---------- */
+.pager{position:absolute;left:0;right:0;top:120px;height:520px;overflow:hidden}
+.pages{display:flex;height:100%;transition:transform .35s cubic-bezier(.2,.8,.2,1)}
+.page{flex:0 0 100%;display:grid;grid-template-columns:repeat(4,240px);grid-auto-rows:256px;justify-content:center;align-content:start;padding-top:28px}
+.tile{display:flex;flex-direction:column;align-items:center;}
+.tile .sq{width:116px;height:116px;border-radius:24px;background:var(--tile);display:flex;align-items:center;justify-content:center;
+  box-shadow:inset 0 0 0 1px rgba(255,255,255,.07),0 8px 24px rgba(0,8,30,.35);transition:transform .12s}
+.tile .sq svg{width:58px;height:58px;color:#d9f2ff}
+.tile.hi .sq{background:var(--tile-hi)}
+.tile .lb{font-size:26px;font-weight:500;letter-spacing:.2px;text-shadow:0 1px 3px rgba(0,0,0,.35);white-space:nowrap}
+.tile:active .sq,.tile.press .sq{transform:scale(.93)}
+.tile.unset .sq{box-shadow:inset 0 0 0 2px rgba(255,255,255,.18)}
+.tile img.appicon{width:70px;height:70px;border-radius:14px}
+.dots{position:absolute;left:0;right:0;bottom:44px;display:flex;justify-content:center;}
+.dots i{width:11px;height:11px;border-radius:50%;background:rgba(255,255,255,.35);transition:background .2s}
+.dots i.on{background:#fff}
+
+.def-banner{position:absolute;left:50%;bottom:78px;transform:translateX(-50%);display:none;align-items:center;
+  background:rgba(63,214,238,.16);box-shadow:inset 0 0 0 1px rgba(63,214,238,.55);border-radius:22px;padding:4px 6px 4px 4px}
+.def-banner.show{display:flex}
+.def-banner button{font-size:21px;font-weight:600;padding:10px 18px;border-radius:18px;color:#e9fbff;white-space:nowrap}
+.def-banner #defMake{background:rgba(63,214,238,.25)}
+.def-banner button:active{background:rgba(63,214,238,.45)}
+.btn.ok{background:rgba(63,214,238,.22);color:#bff4ff}
+
+/* ---------- vehicle ---------- */
+.tabs{position:absolute;left:50%;top:80px;width:840px;margin-left:-420px;display:flex;height:60px;border-bottom:2px solid rgba(255,255,255,.7)}
+.tabs button{flex:1;font-size:28px;font-weight:500;color:var(--text-dim);white-space:nowrap}
+.tabs button.on{font-weight:700;color:#fff}
+.ink{position:absolute;left:0;bottom:-4px;width:33.333%;height:6px;border-radius:3px;background:var(--cyan);transition:transform .3s cubic-bezier(.2,.8,.2,1);
+  box-shadow:0 0 12px rgba(63,214,238,.7)}
+
+/* left column: range + fuel, vertically centred against the car */
+.left{position:absolute;left:110px;top:236px;width:340px}
+.label{font-size:28px;font-weight:500;margin-bottom:6px}
+.range{display:flex;align-items:baseline;height:66px}
+.range .ic{width:34px;height:42px;align-self:center}
+.range b{font-size:56px;font-weight:300;letter-spacing:.5px;line-height:1}
+.range small{font-size:30px;font-weight:300}
+.range.low{color:var(--amber)}
+
+.fuel{margin-top:30px;width:340px}
+.fuel .label{font-size:23px;display:flex;align-items:center;color:var(--text-dim);margin-bottom:10px}
+.warn{display:none;font-size:17px;font-weight:700;color:#1a1000;background:var(--amber);padding:2px 10px;border-radius:10px}
+.fuel.low .warn{display:inline-block}
+.gauge{position:relative;height:16px;border-radius:8px;background:rgba(0,14,40,.55);box-shadow:inset 0 0 0 1px rgba(255,255,255,.22);overflow:hidden}
+.gauge .fill{position:absolute;left:0;top:0;bottom:0;width:0;border-radius:8px;
+  background:linear-gradient(90deg,#1aa6dd,var(--cyan));transition:width .8s ease}
+.fuel.low .gauge .fill{background:linear-gradient(90deg,#e07a00,var(--amber))}
+.gauge .ticks{position:absolute;top:0;right:0;bottom:0;left:0;display:flex;justify-content:space-evenly}
+.gauge .ticks i{width:2px;background:rgba(2,17,46,.65)}
+.gauge .ticks i:nth-child(4){width:3px}
+.ends{display:flex;justify-content:space-between;margin-top:8px;font-size:21px;color:var(--text-dim)}
+.ends #fuelText{color:#fff;font-weight:500}
+
+/* car: pre-rendered with its own floor shadow */
+.car{position:absolute;left:470px;top:178px;width:640px;height:370px;display:flex;align-items:flex-end;justify-content:center}
+.car::before{content:"";position:absolute;left:30px;right:30px;bottom:14px;height:90px;border-radius:50%;
+  background:radial-gradient(ellipse at center,rgba(140,215,255,.40),rgba(140,215,255,0) 70%)}
+.car img{position:relative;width:610px;height:auto}
+
+/* trip computer row */
+.stats{position:absolute;left:36px;right:36px;bottom:26px;height:118px;display:grid;grid-template-columns:repeat(4,1fr);
+  border-top:1px solid rgba(255,255,255,.16);padding-top:18px}
+.stat{display:flex;flex-direction:column;align-items:center;justify-content:flex-start;position:relative}
+.stat + .stat::before{content:"";position:absolute;left:0;top:6px;bottom:10px;width:1px;background:rgba(255,255,255,.14)}
+.stat .v{display:flex;align-items:baseline;height:50px;white-space:nowrap}
+.stat .v .ic{width:32px;height:32px;align-self:center;opacity:.9}
+.stat .v b{font-size:40px;font-weight:400;line-height:1}
+.stat .v small{font-size:25px;font-weight:400;color:var(--text-dim)}
+.stat .k{font-size:24px;font-weight:400;color:var(--text-dim)}
+.vals{transition:opacity .2s}
+.fade{opacity:.15}
+
+.demo-badge{position:absolute;left:50%;top:152px;transform:translateX(-50%);font-size:16px;font-weight:600;letter-spacing:.3px;white-space:nowrap;
+  padding:3px 12px;border-radius:12px;background:rgba(255,176,32,.16);color:#ffd27a;box-shadow:inset 0 0 0 1px rgba(255,176,32,.4);display:none}
+.demo .demo-badge{display:block}
+
+/* ---------- sheet (app picker / settings) ---------- */
+.sheet{position:absolute;top:0;right:0;bottom:0;left:0;background:rgba(0,8,24,.55);display:none;align-items:center;justify-content:center;z-index:20}
+.sheet.open{display:flex}
+.sheet-card{width:900px;height:600px;border-radius:28px;background:linear-gradient(180deg,#0c2f6c,#061a40);box-shadow:0 30px 80px rgba(0,0,0,.5),inset 0 0 0 1px rgba(255,255,255,.1);display:flex;flex-direction:column;overflow:hidden}
+.sheet-card header{display:flex;align-items:center;justify-content:space-between;padding:22px 30px;border-bottom:1px solid rgba(255,255,255,.12)}
+.sheet-card h2{font-size:30px;font-weight:600}
+.sheet-card header button{font-size:30px;width:56px;height:56px;border-radius:14px}
+.sheet-card header button:active{background:rgba(255,255,255,.15)}
+.sheet-body{flex:1;overflow-y:auto;padding:18px 26px 26px;touch-action:pan-y}
+.applist{display:grid;grid-template-columns:repeat(5,1fr);grid-gap:10px;gap:10px}
+.app{display:flex;flex-direction:column;align-items:center;padding:14px 6px;border-radius:18px;font-size:20px;text-align:center}
+.app:active{background:rgba(255,255,255,.12)}
+.app img,.app .ph{width:72px;height:72px;border-radius:16px;background:rgba(255,255,255,.1)}
+.app span{max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.row{display:flex;align-items:center;justify-content:space-between;padding:18px 6px;border-bottom:1px solid rgba(255,255,255,.08);font-size:24px;}
+.row .sub{font-size:18px;color:rgba(255,255,255,.6);margin-top:4px}
+.seg{display:flex;border-radius:14px;overflow:hidden;box-shadow:inset 0 0 0 1px rgba(255,255,255,.3)}
+.seg button{padding:10px 20px;font-size:21px}
+.seg button.on{background:var(--cyan);color:#02112e;font-weight:700}
+.btn{padding:12px 22px;border-radius:14px;background:rgba(255,255,255,.14);font-size:21px}
+.btn:active{background:rgba(255,255,255,.25)}
+pre.diag{font-size:16px;line-height:1.45;white-space:pre-wrap;color:rgba(255,255,255,.85);background:rgba(0,0,0,.25);padding:14px;border-radius:12px;margin-top:10px;-webkit-user-select:text;user-select:text}
+
+#toast{position:absolute;left:50%;bottom:120px;transform:translateX(-50%) translateY(20px);padding:14px 26px;border-radius:18px;background:rgba(0,10,30,.85);
+  font-size:22px;opacity:0;transition:all .25s;pointer-events:none;z-index:30;max-width:900px;text-align:center}
+#toast.show{opacity:1;transform:translateX(-50%)}
+
+/* ---------- splash (VW logo on start) ---------- */
+#splash{position:absolute;top:0;right:0;bottom:0;left:0;background:radial-gradient(circle at 50% 50%,#04193f 0%,#000610 70%);display:flex;align-items:center;justify-content:center;z-index:50;transition:opacity .7s ease}
+#splash img{width:300px;height:300px;opacity:0;transform:scale(.9);animation:logoIn 1.1s .15s ease-out forwards;filter:drop-shadow(0 0 30px rgba(80,170,255,.35))}
+#splash.out{opacity:0;pointer-events:none}
+@keyframes logoIn{to{opacity:1;transform:none}}
+
+/* spacing via margins (works on old head-unit WebViews without flex gap) */
+.status > * + *{margin-left:16px}
+.fuelchip > * + *{margin-left:8px}
+.tile .lb{margin-top:18px}
+.dots i + i{margin-left:12px}
+#defHide{margin-left:4px}
+.range > * + *{margin-left:14px}
+.warn{margin-left:12px}
+.stat .k{margin-top:8px}
+.stat .v > * + *{margin-left:9px}
+.app span{margin-top:10px}
+.row > * + *{margin-left:20px}
+
+/* customisable side bar */
+.rail button.empty{visibility:hidden}
+.rail button.press{background:rgba(255,255,255,.18)}
+.ic-ph{display:flex;align-items:center;justify-content:center}
+.ic-ph svg{width:42px;height:42px;color:#d9f2ff}
+.app.cur{background:rgba(63,214,238,.18);box-shadow:inset 0 0 0 1px rgba(63,214,238,.5)}
+.railpick{display:flex}
+.railpick button{width:58px;height:58px;border-radius:14px;background:rgba(255,255,255,.12);display:flex;align-items:center;justify-content:center}
+.railpick button + button{margin-left:10px}
+.railpick button svg{width:32px;height:32px}
+.sub b{color:#fff}
+.btn + .btn{margin-left:10px}
+.pill{display:inline-block;font-size:16px;font-weight:700;padding:2px 10px;border-radius:10px;margin-left:10px;vertical-align:middle}
+.pill.on{background:rgba(63,214,238,.25);color:#bff4ff}
+.pill.off{background:rgba(255,176,32,.2);color:#ffd27a}
+pre.diag.tall{max-height:none}
+.row[style*="display:block"] > * + *{margin-left:0}
+
+#updBanner.show + #defBanner{display:none} /* one banner at a time */
+#updHide{margin-left:4px}
+.field{width:100%;font:inherit;font-size:22px;color:#fff;background:rgba(0,0,0,.3);border:1px solid rgba(255,255,255,.3);border-radius:12px;padding:12px 14px;margin-top:12px;-webkit-user-select:text;user-select:text}

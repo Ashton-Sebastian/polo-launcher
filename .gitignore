@@ -1,0 +1,15 @@
+# build output
+android/.gradle/
+android/build/
+android/app/build/
+android/local.properties
+# release files live on GitHub Releases, not in git
+dist/
+PoloLauncher-install.zip
+boot/out/
+# never publish the signing key
+signing/
+*.keystore
+*.jks
+.DS_Store
+PoloLauncher-install/
