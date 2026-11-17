@@ -19,7 +19,8 @@ import org.json.JSONObject;
 class TripComputer {
     private static final String[] M = {"ss", "rf", "lt"};
     private static final double REFUEL_JUMP_L = 4;
-    private static final double ESTIMATE_KML = 13.0; // typical 2011 Polo 6R 1.4 mixed driving (~7.7 l/100 km)
+    // Calibrated to the car's own range reading: 250 km with 22 l in the tank (17 Nov 2026) = 11.4 km/l.
+    private static final double ESTIMATE_KML = 250.0 / 22.0;
     private static final long NEW_START_AFTER_MS = 2 * 60 * 1000;
 
     private final SharedPreferences p;
@@ -57,16 +58,20 @@ class TripComputer {
             if (pendingStartReset) { reset("ss", odo); pendingStartReset = false; }
 
             // time with the car on (updates arrive every few seconds; ignore gaps = car was off)
+            double speed = Math.max(0, car.optDouble("speed_kmh", 0));
             if (lastTick > 0 && now - lastTick < 60000) {
                 double dtMin = (now - lastTick) / 60000.0;
-                for (String m : M) e.putFloat(m + "_min", (float) (p.getFloat(m + "_min", 0) + dtMin));
+                for (String m : M) {
+                    e.putFloat(m + "_min", (float) (p.getFloat(m + "_min", 0) + dtMin));
+                    e.putFloat(m + "_int", (float) (p.getFloat(m + "_int", 0) + speed * dtMin / 60.0));
+                }
             }
             lastTick = now;
 
             if (!Double.isNaN(fuel)) {
                 double low = p.getFloat("fuel_low", (float) fuel);
                 if (fuel >= low + REFUEL_JUMP_L) {               // refuelled
-                    e.putFloat("rf_odo", (float) odo).putFloat("rf_min", 0).putFloat("rf_used", 0);
+                    e.putFloat("rf_odo", (float) odo).putFloat("rf_min", 0).putFloat("rf_used", 0).putFloat("rf_int", 0);
                     low = fuel;
                 } else if (fuel < low) {                          // fuel used (count each litre once)
                     double used = low - fuel;
@@ -80,7 +85,9 @@ class TripComputer {
 
             double bestKml = Double.NaN;
             for (String m : M) {
-                double dist = Math.max(0, odo - p.getFloat(m + "_odo", (float) odo));
+                double odoDist = Math.max(0, odo - p.getFloat(m + "_odo", (float) odo));
+                // smooth live distance from speed, kept within the odometer's whole-km reading
+                double dist = Math.min(Math.max(p.getFloat(m + "_int", 0), odoDist), odoDist + 0.999);
                 double min = p.getFloat(m + "_min", 0);
                 double used = p.getFloat(m + "_used", 0);
                 out.put(m + "_distance_km", dist);
@@ -97,7 +104,7 @@ class TripComputer {
                     out.put("range_km", fuel * bestKml);
                     out.put("range_estimated", false);
                 } else {
-                    // not enough driving measured yet: estimate with typical Polo 6R consumption, shown as "≈"
+                    // not enough driving measured yet: use the car's own range figure (calibrated consumption)
                     out.put("range_km", fuel * ESTIMATE_KML);
                     out.put("range_estimated", true);
                 }
@@ -107,6 +114,6 @@ class TripComputer {
     }
 
     private void reset(String m, double odo) {
-        p.edit().putFloat(m + "_odo", (float) odo).putFloat(m + "_min", 0).putFloat(m + "_used", 0).apply();
+        p.edit().putFloat(m + "_odo", (float) odo).putFloat(m + "_min", 0).putFloat(m + "_used", 0).putFloat(m + "_int", 0).apply();
     }
 }

@@ -57,14 +57,14 @@ public class VehicleHub {
         IntentFilter sf = new IntentFilter(Intent.ACTION_SCREEN_ON);
         sf.addAction(Intent.ACTION_SCREEN_OFF);
         ctx.registerReceiver(screenRx, sf);
-        // the car only sends data when something changes: tick the trip computer while the car is on
+        // the car only sends data when something changes: update the trip computer every 2 s while the car is on (live)
         ticker.postDelayed(new Runnable() {
             @Override public void run() {
                 JSONObject m = lastMapped;
                 if (screenOn && m != null) push(m);
-                ticker.postDelayed(this, 15000);
+                ticker.postDelayed(this, 2000);
             }
-        }, 15000);
+        }, 2000);
         can = new CanBridge(ctx, (mapped, raw) -> {
             lastMapped = mapped;
             push(mapped);

@@ -235,3 +235,7 @@ pre.diag.tall{max-height:none}
 .doorchip.show{display:inline-block}
 .doors{position:absolute;left:300px;top:-6px;width:64px;height:118px}
 .doors svg{width:100%;height:100%;overflow:visible}
+
+.dooricon{display:none;width:30px;height:54px}
+.dooricon.show{display:inline-flex}
+.dooricon svg{width:100%;height:100%;overflow:visible}

@@ -667,7 +667,7 @@ function render() {
   $('#tempTxt').textContent = V.temp_c == null ? '' : num(V.temp_c, 0) + '°C';
 
   // vehicle screen
-  $('#range').textContent = (V.range_estimated && V.range_km != null ? '≈ ' : '') + num(V.range_km);
+  $('#range').textContent = num(V.range_km);
   $('#rangeRow').classList.toggle('low', low);
   $('#fuelFill').style.width = (pct == null ? 0 : Math.max(1.5, Math.min(100, pct))) + '%';
   $('#fuelText').textContent = litres == null ? '--L' : `${num(litres, 0)}L · ${Math.round(pct)}%`;
@@ -680,7 +680,8 @@ function render() {
   $('#carLine').textContent = cl.join('  ·  ');
 
   const p = ['ss', 'rf', 'lt'][tab];
-  $('#sDist').textContent = num(V[p + '_distance_km'], 0);
+  const dk = V[p + '_distance_km'];
+  $('#sDist').textContent = dk != null && dk < 100 ? num(dk, 1) : num(dk, 0);
   $('#sTime').textContent = hm(V[p + '_time_min']);
   const c = consumption(p); $('#sCons').textContent = c.v; $('#sConsU').textContent = c.u;
   $('#sAvg').textContent = num(V[p + '_avg_speed_kmh'], 0);
@@ -711,15 +712,15 @@ function doorsSvg(d) {
   </svg>`;
 }
 function renderDoors() {
+  // car icon at the top right, only while a door, the boot or the bonnet is open
   const keys = ['door_fl', 'door_fr', 'door_rl', 'door_rr', 'door_boot', 'door_bonnet'];
-  const known = keys.some(k => V[k] != null);
   const d = {}; keys.forEach(k => { d[k] = V[k] === 1; });
   const open = keys.filter(k => d[k]);
-  $('#doorsView').innerHTML = known ? doorsSvg(d) : '';
   const names = { door_fl: 'Front left', door_fr: 'Front right', door_rl: 'Rear left', door_rr: 'Rear right', door_boot: 'Boot', door_bonnet: 'Bonnet' };
-  const chip = $('#doorChip');
-  chip.classList.toggle('show', open.length > 0);
-  chip.textContent = open.length === 1 ? names[open[0]] + ' open' : open.length > 1 ? open.length + ' doors open' : '';
+  const el = $('#doorIcon');
+  el.classList.toggle('show', open.length > 0);
+  el.innerHTML = open.length ? doorsSvg(d) : '';
+  el.setAttribute('aria-label', open.map(k => names[k] + ' open').join(', ') || 'All doors closed');
 }
 
 /* ---------------- demo simulator (until real CAN data is wired up) ---------------- */
