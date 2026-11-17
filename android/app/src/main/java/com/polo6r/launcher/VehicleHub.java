@@ -36,6 +36,12 @@ public class VehicleHub {
     private JSONObject lastMapped;
     private final android.os.Handler ticker = new android.os.Handler(android.os.Looper.getMainLooper());
     private boolean screenOn = true;
+    // Live battery voltage from the unit's core service (com.nwd.kernel): ask, it answers with a broadcast.
+    private static final String ACT_QUERY_VOLT = "com.nwd.action.ACTION_QUERY_CAN_BATTERY_VOLTAGE";
+    private static final String ACT_VOLT = "com.nwd.action.ACTION_CAN_BATTERY_VOLTAGE";
+    private volatile double liveVolt = Double.NaN;
+    private int voltLogs = 0, tickCount = 0;
+    private BroadcastReceiver voltRx;
     private android.content.BroadcastReceiver screenRx;
 
     VehicleHub(Context ctx, Listener listener) {
@@ -61,6 +67,9 @@ public class VehicleHub {
         ticker.postDelayed(new Runnable() {
             @Override public void run() {
                 JSONObject m = lastMapped;
+                if (screenOn && (tickCount++ % 2 == 0)) {
+                    try { ctx.sendBroadcast(new Intent(ACT_QUERY_VOLT)); } catch (Exception ignored) { }
+                }
                 if (screenOn && m != null) push(m);
                 ticker.postDelayed(this, 2000);
             }
@@ -70,6 +79,25 @@ public class VehicleHub {
             push(mapped);
         });
         can.start();
+        voltRx = new BroadcastReceiver() {
+            @Override public void onReceive(Context c, Intent i) {
+                Bundle x = i.getExtras();
+                if (x == null) return;
+                Object v = x.get("extra_voltage_value");
+                if (voltLogs++ < 5) android.util.Log.i("PoloCan", "voltage reply " + x.keySet() + " value=" + v + " (" + (v == null ? "null" : v.getClass().getSimpleName()) + ")");
+                double d;
+                if (v instanceof Number) d = ((Number) v).doubleValue();
+                else { try { d = Double.parseDouble(String.valueOf(v)); } catch (Exception e) { return; } }
+                while (d > 40) d /= 10;           // 123 -> 12.3, 1234 -> 12.34
+                if (d < 5) return;                 // not a usable reading
+                liveVolt = Math.round(d * 10) / 10.0;
+                JSONObject m = lastMapped;
+                if (m != null) push(m);
+            }
+        };
+        IntentFilter vf = new IntentFilter(ACT_VOLT);
+        if (Build.VERSION.SDK_INT >= 33) ctx.registerReceiver(voltRx, vf, Context.RECEIVER_EXPORTED);
+        else ctx.registerReceiver(voltRx, vf);
         startBroadcastSources();
     }
 
@@ -84,6 +112,7 @@ public class VehicleHub {
                     while (it.hasNext()) { String k = it.next(); out.put(k, computed.get(k)); }
                     it = mapped.keys();
                     while (it.hasNext()) { String k = it.next(); out.put(k, mapped.get(k)); }
+                    if (!Double.isNaN(liveVolt)) out.put("battery_v", liveVolt); // live reading wins
                     it = out.keys();
                     while (it.hasNext()) { String k = it.next(); state.put(k, out.get(k)); }
                 } catch (Exception ignored) { }
@@ -119,6 +148,7 @@ public class VehicleHub {
     void stop() {
         if (can != null) can.stop();
         ticker.removeCallbacksAndMessages(null);
+        if (voltRx != null) { try { ctx.unregisterReceiver(voltRx); } catch (Exception ignored) { } }
         if (screenRx != null) { try { ctx.unregisterReceiver(screenRx); } catch (Exception ignored) { } }
         for (BroadcastReceiver r : receivers) {
             try { ctx.unregisterReceiver(r); } catch (Exception ignored) { }
