@@ -627,7 +627,7 @@ window.onVehicle = d => {
 
 let tab = 0;
 function setTab(i) {
-  if (i < 0 || i > 2 || i === tab) return;
+  if (i < 0 || i > 0 || i === tab) return; // only "Since Start"
   tab = i;
   $$('#tabs button').forEach((b, j) => b.classList.toggle('on', j === tab));
   $('#ink').style.transform = `translateX(${tab * 100}%)`;
@@ -657,7 +657,7 @@ function render() {
 
   // status chip
   $('#fuelMini').style.width = (pct == null ? 0 : Math.max(2, Math.min(100, pct))) + '%';
-  $('#fuelPct').textContent = pct == null ? '--%' : Math.round(pct) + '%';
+  $('#fuelPct').textContent = litres == null ? '-- l' : Math.round(litres) + ' l';
   $('#fuelChip').classList.toggle('low', low);
   $('#tempTxt').textContent = V.temp_c == null ? '' : num(V.temp_c, 0) + '°C';
 
