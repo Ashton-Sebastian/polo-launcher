@@ -657,7 +657,7 @@ function render() {
 
   // status chip
   $('#fuelMini').style.width = (pct == null ? 0 : Math.max(2, Math.min(100, pct))) + '%';
-  $('#fuelPct').textContent = litres == null ? '-- l' : Math.round(litres) + ' l';
+  $('#fuelPct').textContent = litres == null ? '--L' : Math.round(litres) + 'L';
   $('#fuelChip').classList.toggle('low', low);
   $('#tempTxt').textContent = V.temp_c == null ? '' : num(V.temp_c, 0) + '°C';
 
@@ -665,7 +665,7 @@ function render() {
   $('#range').textContent = (V.range_estimated && V.range_km != null ? '≈ ' : '') + num(V.range_km);
   $('#rangeRow').classList.toggle('low', low);
   $('#fuelFill').style.width = (pct == null ? 0 : Math.max(1.5, Math.min(100, pct))) + '%';
-  $('#fuelText').textContent = litres == null ? '-- l' : `${num(litres, 0)} l · ${Math.round(pct)}%`;
+  $('#fuelText').textContent = litres == null ? '--L' : `${num(litres, 0)}L · ${Math.round(pct)}%`;
   $('#fuelBox').classList.toggle('low', low);
   const cl = [];
   if (V.odometer_km != null) cl.push(num(V.odometer_km) + ' km');

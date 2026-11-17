@@ -95,6 +95,16 @@ class Updater {
         prefs(act).edit().putString("url", url == null ? "" : url.trim()).apply();
     }
 
+    private long lastAuto;
+
+    /** On every car start / return to the home screen, at most every 20 minutes. */
+    void checkSoon() {
+        long now = System.currentTimeMillis();
+        if (now - lastAuto < 20 * 60 * 1000L) return;
+        lastAuto = now;
+        act.getWindow().getDecorView().postDelayed(() -> check(false), 8000);
+    }
+
     /** Called on start and every few hours. */
     void schedule() {
         act.getWindow().getDecorView().postDelayed(new Runnable() {
@@ -127,7 +137,7 @@ class Updater {
         new Thread(() -> {
             try {
                 if (userAsked) status("checking", "Checking for updates…");
-                JSONObject f = new JSONObject(new String(get(base() + "update.json"), StandardCharsets.UTF_8));
+                JSONObject f = new JSONObject(new String(get(base() + "update.json?t=" + System.currentTimeMillis()), StandardCharsets.UTF_8));
                 lastFeed = f;
                 boolean webDone = false;
                 int webV = f.optInt("webVersion", 0);
@@ -230,6 +240,7 @@ class Updater {
         c.setReadTimeout(30000);
         c.setInstanceFollowRedirects(true);
         c.setUseCaches(false);
+        c.setRequestProperty("Cache-Control", "no-cache");
         int code = c.getResponseCode();
         if (code != 200) throw new IllegalStateException("HTTP " + code + " for " + url);
         try (InputStream in = c.getInputStream()) {

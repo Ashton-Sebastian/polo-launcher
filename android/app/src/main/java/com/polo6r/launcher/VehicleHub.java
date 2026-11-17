@@ -33,6 +33,9 @@ public class VehicleHub {
     private long lastUpdate = 0;
     private CanBridge can;
     private TripComputer trip;
+    private JSONObject lastMapped;
+    private final android.os.Handler ticker = new android.os.Handler(android.os.Looper.getMainLooper());
+    private boolean screenOn = true;
     private android.content.BroadcastReceiver screenRx;
 
     VehicleHub(Context ctx, Listener listener) {
@@ -46,6 +49,7 @@ public class VehicleHub {
         screenRx = new BroadcastReceiver() {
             @Override public void onReceive(Context c, Intent i) {
                 boolean on = Intent.ACTION_SCREEN_ON.equals(i.getAction());
+                screenOn = on;
                 trip.onScreen(on);
                 if (on) HomeRedirectService.ensureEnabled(c); // turns the fix back on if allowed (it then shows the logo)
             }
@@ -53,7 +57,24 @@ public class VehicleHub {
         IntentFilter sf = new IntentFilter(Intent.ACTION_SCREEN_ON);
         sf.addAction(Intent.ACTION_SCREEN_OFF);
         ctx.registerReceiver(screenRx, sf);
+        // the car only sends data when something changes: tick the trip computer while the car is on
+        ticker.postDelayed(new Runnable() {
+            @Override public void run() {
+                JSONObject m = lastMapped;
+                if (screenOn && m != null) push(m);
+                ticker.postDelayed(this, 15000);
+            }
+        }, 15000);
         can = new CanBridge(ctx, (mapped, raw) -> {
+            lastMapped = mapped;
+            push(mapped);
+        });
+        can.start();
+        startBroadcastSources();
+    }
+
+    private void push(JSONObject mapped) {
+        {
             JSONObject out = new JSONObject();
             synchronized (VehicleHub.this) {
                 try {
@@ -69,8 +90,11 @@ public class VehicleHub {
                 lastUpdate = System.currentTimeMillis();
             }
             if (out.length() > 0) listener.onData(out.toString());
-        });
-        can.start();
+        }
+    }
+
+    /** Optional extra data sources from assets/vehicle_sources.json (broadcast based). */
+    private void startBroadcastSources() {
         JSONObject cfg = loadConfig();
         if (cfg == null) return;
         JSONArray list = cfg.optJSONArray("broadcasts");
@@ -94,6 +118,7 @@ public class VehicleHub {
 
     void stop() {
         if (can != null) can.stop();
+        ticker.removeCallbacksAndMessages(null);
         if (screenRx != null) { try { ctx.unregisterReceiver(screenRx); } catch (Exception ignored) { } }
         for (BroadcastReceiver r : receivers) {
             try { ctx.unregisterReceiver(r); } catch (Exception ignored) { }

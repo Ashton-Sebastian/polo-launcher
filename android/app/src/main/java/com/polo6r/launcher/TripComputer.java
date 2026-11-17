@@ -57,7 +57,7 @@ class TripComputer {
             if (pendingStartReset) { reset("ss", odo); pendingStartReset = false; }
 
             // time with the car on (updates arrive every few seconds; ignore gaps = car was off)
-            if (lastTick > 0 && now - lastTick < 30000) {
+            if (lastTick > 0 && now - lastTick < 60000) {
                 double dtMin = (now - lastTick) / 60000.0;
                 for (String m : M) e.putFloat(m + "_min", (float) (p.getFloat(m + "_min", 0) + dtMin));
             }

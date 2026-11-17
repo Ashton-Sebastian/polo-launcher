@@ -154,6 +154,36 @@ public class HomeRedirectService extends AccessibilityService {
         } catch (Exception ignored) { }
     }
 
+    private android.view.View logoView;
+
+    /**
+     * Draw the VW logo as an accessibility overlay on top of whatever is on screen. Unlike opening a screen,
+     * this doesn't make the NWD firmware switch audio source (which caused a sound from the speakers).
+     */
+    void showLogoOverlay() {
+        new android.os.Handler(android.os.Looper.getMainLooper()).post(() -> {
+            if (logoView != null) return;
+            try {
+                final android.view.WindowManager wm = (android.view.WindowManager) getSystemService(WINDOW_SERVICE);
+                android.view.WindowManager.LayoutParams lp = new android.view.WindowManager.LayoutParams(
+                        android.view.WindowManager.LayoutParams.MATCH_PARENT, android.view.WindowManager.LayoutParams.MATCH_PARENT,
+                        android.view.WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
+                        android.view.WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN
+                                | android.view.WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS
+                                | android.view.WindowManager.LayoutParams.FLAG_FULLSCREEN
+                                | android.view.WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
+                        android.graphics.PixelFormat.TRANSLUCENT);
+                logoView = new SplashView(this,
+                        () -> MainActivity.instance == null || MainActivity.webReadyAt > 0,
+                        () -> { try { wm.removeView(logoView); } catch (Exception ignored) { } logoView = null; });
+                wm.addView(logoView, lp);
+            } catch (Exception e) {
+                logoView = null;
+                SplashActivity.startActivity(this); // fallback
+            }
+        });
+    }
+
     static boolean global(String name) {
         HomeRedirectService s = instance;
         if (s == null) return false;

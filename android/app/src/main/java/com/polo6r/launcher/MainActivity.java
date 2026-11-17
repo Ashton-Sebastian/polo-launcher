@@ -135,6 +135,7 @@ public class MainActivity extends Activity {
         HomeRedirectService.ensureEnabled(this);
         hideSystemBars();
         runJs("window.onResumeLauncher && window.onResumeLauncher()");
+        if (updater != null) updater.checkSoon();
     }
 
     @Override

@@ -7,8 +7,8 @@ android {
         applicationId 'com.polo6r.launcher'
         minSdk 21          // works on old and new head units
         targetSdk 35
-        versionCode 7
-        versionName '1.5'
+        versionCode 8
+        versionName '1.6'
     }
     // Updates only install over an app signed with the same key, so the key lives with the project.
     signingConfigs {
