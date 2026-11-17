@@ -22,10 +22,10 @@ cat > "$OUT/update.json" <<JSON
 {
   "versionCode": $VC,
   "versionName": "$VN",
-  "apk": "PoloLauncher.apk",
+  "apk": "PoloLauncher.apk?v=$VC",
   "webVersion": $WV,
   "webMinApp": $VC,
-  "web": "web.zip",
+  "web": "web.zip?v=$WV",
   "notes": "$NOTES"
 }
 JSON
