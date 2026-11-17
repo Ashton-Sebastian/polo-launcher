@@ -199,3 +199,8 @@ pre.diag.tall{max-height:none}
 #updBanner.show + #defBanner{display:none} /* one banner at a time */
 #updHide{margin-left:4px}
 .field{width:100%;font:inherit;font-size:22px;color:#fff;background:rgba(0,0,0,.3);border:1px solid rgba(255,255,255,.3);border-radius:12px;padding:12px 14px;margin-top:12px;-webkit-user-select:text;user-select:text}
+
+/* network status icon (next to Bluetooth) */
+.status .net{width:30px;height:30px}
+.status .net .dim{opacity:.28}
+.status .net.off{opacity:.55}

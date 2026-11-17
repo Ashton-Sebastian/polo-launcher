@@ -253,12 +253,23 @@ public class Bridge {
         return hub.snapshot();
     }
 
+    /** The VW logo on start-up is now drawn natively (SplashView), so the page never shows its own. */
     @JavascriptInterface
-    public boolean isFirstStart() {
-        boolean f = MainActivity.firstStart;
-        MainActivity.firstStart = false;
-        return f;
+    public boolean isFirstStart() { return false; }
+
+    @JavascriptInterface
+    public String getNetworkStatus() { return NetStatus.json(act); }
+
+    @JavascriptInterface
+    public boolean getSplashOnStart() { return SplashActivity.enabled(act); }
+
+    @JavascriptInterface
+    public void setSplashOnStart(boolean on) {
+        HomeRedirectService.prefs(act).edit().putBoolean(SplashActivity.KEY_ON, on).apply();
     }
+
+    @JavascriptInterface
+    public void showSplash() { SplashActivity.show(act); }
 
     /* ---------- diagnostics (helps wire up the real CAN data) ---------- */
 

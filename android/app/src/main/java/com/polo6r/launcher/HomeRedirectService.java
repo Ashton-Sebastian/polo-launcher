@@ -32,10 +32,28 @@ public class HomeRedirectService extends AccessibilityService {
     private long lastRedirect;
     private String lastPkg = "";
 
+    private android.content.BroadcastReceiver screenRx;
+    private long lastScreenOff;
+
     @Override
     protected void onServiceConnected() {
         instance = this;
         reload();
+        // Car switched on = head unit wakes up: show the VW logo, then return to what was on screen.
+        screenRx = new android.content.BroadcastReceiver() {
+            @Override public void onReceive(Context c, Intent i) {
+                long now = System.currentTimeMillis();
+                if (Intent.ACTION_SCREEN_OFF.equals(i.getAction())) { lastScreenOff = now; return; }
+                if (Intent.ACTION_SCREEN_ON.equals(i.getAction()) && lastScreenOff > 0
+                        && now - lastScreenOff > 3000 && SplashActivity.enabled(c)) {
+                    SplashActivity.show(c);
+                }
+            }
+        };
+        android.content.IntentFilter f = new android.content.IntentFilter();
+        f.addAction(Intent.ACTION_SCREEN_ON);
+        f.addAction(Intent.ACTION_SCREEN_OFF);
+        registerReceiver(screenRx, f);
     }
 
     @Override
@@ -135,6 +153,7 @@ public class HomeRedirectService extends AccessibilityService {
 
     @Override
     public void onDestroy() {
+        if (screenRx != null) { try { unregisterReceiver(screenRx); } catch (Exception ignored) { } screenRx = null; }
         instance = null;
         super.onDestroy();
     }

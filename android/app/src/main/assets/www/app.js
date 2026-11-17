@@ -198,7 +198,7 @@ function show(name) {
 }
 window.goHome = () => { closeSheet(); show('home'); setPage(0); };
 window.onBack = () => { if ($('#sheet').classList.contains('open')) closeSheet(); else if (screen !== 'home') show('home'); };
-window.onResumeLauncher = () => { tick(); refreshDefault(); };
+window.onResumeLauncher = () => { tick(); refreshDefault(); try { refreshNet(); } catch (e) {} };
 
 /* ---------------- default home screen ---------------- */
 // Banner on the home screen until Polo Launcher is the default Home app (hide it with ✕).
@@ -328,6 +328,10 @@ function openLauncherSettings() {
   diag += `\nWeb view: ${innerWidth}x${innerHeight} @${devicePixelRatio}x`;
   openSheet('Launcher', `
     <div class="row"><div>Home button fix ${homeFix().on ? '<span class="pill on">On</span>' : '<span class="pill off">Off</span>'}<div class="sub">Makes the unit's Home button open Polo Launcher</div></div><button class="btn" data-homefix="1">Set up</button></div>
+    <div class="row"><div>VW logo when the car starts<div class="sub">Shows for a moment each time the unit wakes up, then returns to where you were</div></div>
+      <div style="white-space:nowrap;display:flex"><div class="seg" data-set="splash">
+        <button data-v="true" class="${splashOn() ? 'on' : ''}">On</button><button data-v="false" class="${!splashOn() ? 'on' : ''}">Off</button></div>
+        <button class="btn" data-splashprev="1" style="margin-left:10px">Preview</button></div></div>
     <div class="row"><div>Find car data<div class="sub">Works out how this unit sends fuel / trip data</div></div><button class="btn" data-cardata="1">Open</button></div>
     <div class="row"><div>Updates<div class="sub">${updInfoText()}</div></div><div style="white-space:nowrap"><button class="btn" data-updcheck="1">Check now</button><button class="btn" data-updsrc="1">Source</button></div></div>
     <div class="row"><div>Side bar buttons<div class="sub">Tap one to change it (or long-press it on the side bar)</div></div>
@@ -348,12 +352,14 @@ function openLauncherSettings() {
     const rs = e.target.closest('[data-railslot]'); if (rs) return openRailSheet(+rs.dataset.railslot);
     if (e.target.closest('[data-homefix]')) return openHomeFixSheet();
     if (e.target.closest('[data-cardata]')) return openCarDataSheet();
+    if (e.target.closest('[data-splashprev]')) { if (B) B.showSplash(); else toast('Only on the head unit'); return; }
     if (e.target.closest('[data-updcheck]')) { if (B) B.checkUpdates(); else toast('Only on the head unit'); return; }
     if (e.target.closest('[data-updsrc]')) return openUpdateSourceSheet();
     const r = e.target.closest('[data-reset]');
     if (r) { mapping = {}; store.set('mapping', mapping); buildHome(); toast('App assignments cleared'); return; }
     const b = e.target.closest('.seg button'); if (!b) return;
     const key = b.parentElement.dataset.set; let v = b.dataset.v;
+    if (key === 'splash') { const on = v === 'true'; if (B) B.setSplashOnStart(on); b.parentElement.querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b)); return; }
     if (key === 'tank') v = +v; if (key === 'demo') v = v === 'true';
     settings[key] = v; saveSettings();
     b.parentElement.querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b));
@@ -421,6 +427,28 @@ window.onSniff = line => {
   sniffLog.push(line); if (sniffLog.length > 500) sniffLog.shift();
   const el = $('#sniff'); if (el) el.textContent = sniffLog.slice(-60).join('\n');
 };
+
+function splashOn() { try { return B ? B.getSplashOnStart() : true; } catch (e) { return true; } }
+
+/* ---------------- network status icon ---------------- */
+function netSvg(n) {
+  const lv = n.level || 0, on = i => (i <= lv ? '' : ' class="dim"');
+  const warn = n.internet === false && n.type !== 'none'
+    ? '<circle cx="20.5" cy="18.5" r="3.3" fill="#ffb020" stroke="none"/><path d="M20.5 16.6v2.2M20.5 20.2v.2" stroke="#1a1000" stroke-width="1.4"/>' : '';
+  if (n.type === 'wifi') return S(`<circle cx="12" cy="18.5" r="1.4" fill="currentColor"/><path${on(1)} d="M8.4 15.3a5.2 5.2 0 0 1 7.2 0"/><path${on(2)} d="M5.4 12.2a9.4 9.4 0 0 1 13.2 0"/><path${on(3)} d="M2.4 9.1a13.6 13.6 0 0 1 19.2 0"/>${warn}`);
+  if (n.type === 'cell') return S(`<rect x="3" y="16" width="3" height="4" rx=".6"${on(1)} fill="currentColor"/><rect x="8" y="12.5" width="3" height="7.5" rx=".6"${on(2)} fill="currentColor"/><rect x="13" y="9" width="3" height="11" rx=".6"${on(3)} fill="currentColor"/><rect x="18" y="5.5" width="3" height="14.5" rx=".6"${on(4)} fill="currentColor"/>${warn}`);
+  if (n.type === 'eth' || n.type === 'other') return S(`<rect x="7" y="4" width="10" height="9" rx="1.5"/><path d="M12 13v4M5 21v-4h14v4"/>${warn}`);
+  return S('<path class="dim" d="M5.4 12.2a9.4 9.4 0 0 1 13.2 0M2.4 9.1a13.6 13.6 0 0 1 19.2 0M8.4 15.3a5.2 5.2 0 0 1 7.2 0"/><circle cx="12" cy="18.5" r="1.4" fill="currentColor" class="dim"/><path d="M4 3.5l16 17"/>');
+}
+function refreshNet() {
+  let n = { type: 'wifi', level: 3, internet: true }; // desktop preview
+  if (B) { try { n = JSON.parse(B.getNetworkStatus()); } catch (e) { n = { type: 'none' }; } }
+  const el = $('#netIcon');
+  el.innerHTML = netSvg(n);
+  el.classList.toggle('off', n.type === 'none');
+  el.setAttribute('aria-label', n.type === 'none' ? 'No connection' : n.type === 'wifi' ? 'Wi-Fi' : n.type === 'cell' ? 'Mobile data' : 'Wired');
+}
+refreshNet(); setInterval(refreshNet, 5000);
 
 /* ---------------- updates ---------------- */
 function updInfo() { try { return B ? JSON.parse(B.getUpdateInfo()) : { source: '', appVersion: 'browser', webVersion: '-' }; } catch (e) { return {}; } }

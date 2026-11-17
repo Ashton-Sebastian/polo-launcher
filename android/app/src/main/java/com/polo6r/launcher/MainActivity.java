@@ -47,7 +47,16 @@ public class MainActivity extends Activity {
         web.addJavascriptInterface(new Bridge(this, hub), "PoloBridge");
         updater = new Updater(this);
         web.loadUrl(Updater.startUrl(this));
-        setContentView(web);
+        android.widget.FrameLayout root = new android.widget.FrameLayout(this);
+        root.addView(web);
+        if (firstStart && SplashActivity.enabled(this)) {
+            // full restart: VW logo straight away, while the screens load underneath
+            final SplashView[] sv = new SplashView[1];
+            sv[0] = new SplashView(this, () -> root.removeView(sv[0]));
+            root.addView(sv[0]);
+        }
+        firstStart = false;
+        setContentView(root);
         hub.start();
         updater.schedule();
         hideSystemBars();
