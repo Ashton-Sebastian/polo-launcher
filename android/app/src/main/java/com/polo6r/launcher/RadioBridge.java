@@ -96,22 +96,45 @@ class RadioBridge {
         if (am == null) am = (android.media.AudioManager) ctx.getSystemService(Context.AUDIO_SERVICE);
         boolean otherMusic = am.isMusicActive();
         if (otherMusic) pauseOtherMedia();          // pause CarPlay / Bluetooth music
-        requestSource(RADIO_SOURCE);                 // NWD then holds Android's audio focus for the radio
+        // the unit's setting service grabs audio focus right after a switch to the radio: ignore that,
+        // then take focus ourselves so CarPlay pressing play (it asks for focus) switches the radio off
+        long now = System.currentTimeMillis();
+        ignoreFocusUntil = now + 1900;
+        requestSource(RADIO_SOURCE);
         watchPlayers();
-        radioStartedAt = System.currentTimeMillis();
+        radioStartedAt = now;
         radioPlayers.clear();
+        // players that already exist (the radio's own, CarPlay's channel that stays open while paused) are known;
+        // only a brand-new music player counts as other music starting
+        if (android.os.Build.VERSION.SDK_INT >= 26)
+            for (android.media.AudioPlaybackConfiguration c : am.getActivePlaybackConfigurations()) radioPlayers.add(c.hashCode());
         radioPlaying = true;
-        // after things settle (CarPlay paused), every player still running belongs to the radio
-        new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(() -> {
-            if (android.os.Build.VERSION.SDK_INT >= 26 && radioPlaying)
-                for (android.media.AudioPlaybackConfiguration c : am.getActivePlaybackConfigurations()) radioPlayers.add(c.hashCode());
-        }, 2500);
+        main.removeCallbacks(takeFocus);
+        main.postDelayed(takeFocus, 2000);
         resumeOnGain = false;
         state(true);
     }
 
     /** Stop the radio: hand the car's audio back to Android (CarPlay, music apps). */
+    private final android.os.Handler main = new android.os.Handler(android.os.Looper.getMainLooper());
+    private volatile long ignoreFocusUntil;
+    private final Runnable takeFocus = () -> { if (radioPlaying) { Log.i(TAG, "holding audio focus for the radio"); requestFocus(); } };
+
+    /** Someone else took over the audio (CarPlay play, BT music): switch the radio off. */
+    private void otherAudioStarted(String why, boolean comeBack) {
+        if (!radioPlaying) return;
+        Log.i(TAG, why + ": radio off");
+        radioPlaying = false;
+        resumeOnGain = comeBack;
+        main.removeCallbacks(takeFocus);
+        if (!comeBack) abandonFocus();
+        requestSource(ANDROID_SOURCE);
+        state(false);
+    }
+
     void stopRadioAudio() {
+        main.removeCallbacks(takeFocus);
+        abandonFocus();
         radioPlaying = false;
         resumeOnGain = false;
         requestSource(ANDROID_SOURCE);
@@ -140,13 +163,7 @@ class RadioBridge {
                     if (usage != android.media.AudioAttributes.USAGE_MEDIA && usage != android.media.AudioAttributes.USAGE_GAME) continue;
                     int id = c.hashCode();                         // stable per player
                     if (settling) { radioPlayers.add(id); continue; }  // the radio's own player
-                    if (!radioPlayers.contains(id)) {
-                        Log.i(TAG, "other music started (" + c.getAudioAttributes() + "): radio off");
-                        radioPlaying = false;
-                        requestSource(ANDROID_SOURCE);
-                        state(false);
-                        return;
-                    }
+                    if (!radioPlayers.contains(id)) { otherAudioStarted("new music player", false); return; }
                 }
             }
         }, new android.os.Handler(android.os.Looper.getMainLooper()));
@@ -164,15 +181,16 @@ class RadioBridge {
 
     private final android.media.AudioManager.OnAudioFocusChangeListener focusListener = change -> {
         Log.i(TAG, "audio focus " + change);
+        if (System.currentTimeMillis() < ignoreFocusUntil) return;           // the unit's own grab when switching to radio
         switch (change) {
             case android.media.AudioManager.AUDIOFOCUS_LOSS:                // CarPlay / a music app started playing
-                if (radioPlaying) { radioPlaying = false; requestSource(ANDROID_SOURCE); state(false); }
+                otherAudioStarted("audio focus taken", false);
                 break;
-            case android.media.AudioManager.AUDIOFOCUS_LOSS_TRANSIENT:      // e.g. phone call, Siri: pause, come back after
-                if (radioPlaying) { radioPlaying = false; resumeOnGain = true; requestSource(ANDROID_SOURCE); state(false); }
+            case android.media.AudioManager.AUDIOFOCUS_LOSS_TRANSIENT:      // e.g. Siri: pause, come back after
+                otherAudioStarted("audio focus taken for a moment", true);
                 break;
             case android.media.AudioManager.AUDIOFOCUS_GAIN:
-                if (resumeOnGain) { resumeOnGain = false; requestSource(RADIO_SOURCE); radioPlaying = true; state(true); }
+                if (resumeOnGain) { resumeOnGain = false; requestRadioAudio(); }
                 break;
             default: break;                                                  // directions (may duck): the unit's navigation mixing handles it
         }
