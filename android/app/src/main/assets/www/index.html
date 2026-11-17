@@ -83,6 +83,25 @@
 
       <div class="demo-badge" id="demoBadge">Demo data – real car data not connected yet (Launcher › Find car data)</div>
     </section>
+    <!-- RADIO (the unit's built-in tuner) -->
+    <section id="radio" class="screen">
+      <nav class="tabs radiotabs" id="rdTabs"><button data-band="fm" class="on">FM</button><button data-band="am">AM</button><i class="ink" id="rdInk"></i></nav>
+      <div class="rd-tools"><button class="btn" data-rc="scan">Scan</button><button class="btn" data-rc="ams">Auto-store</button></div>
+      <div class="rd-station">
+        <div class="rd-ps" id="rdPs">Radio</div>
+        <div class="rd-freq"><b id="rdFreq">--</b><small id="rdUnit">MHz</small><span class="rd-st" id="rdSt">ST</span></div>
+        <div class="rd-rt" id="rdRt"></div>
+      </div>
+      <div class="rd-controls">
+        <button data-rc="seekdown" aria-label="Seek down"></button>
+        <button data-rc="down" aria-label="Tune down"></button>
+        <button data-rc="power" class="rd-power" aria-label="Radio on/off"></button>
+        <button data-rc="up" aria-label="Tune up"></button>
+        <button data-rc="seekup" aria-label="Seek up"></button>
+      </div>
+      <div class="rd-dial" id="rdDial"><div class="rd-scale" id="rdScale"></div><i class="rd-needle" id="rdNeedle"></i></div>
+      <div class="rd-presets" id="rdPresets"></div>
+    </section>
   </main>
 
   <!-- App picker / settings sheet -->

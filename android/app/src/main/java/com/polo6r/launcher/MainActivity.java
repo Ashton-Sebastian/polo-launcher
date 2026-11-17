@@ -24,6 +24,7 @@ public class MainActivity extends Activity {
     private WebView web;
     Updater updater;
     private VehicleHub hub;
+    RadioBridge radio;
 
     @SuppressLint({"SetJavaScriptEnabled", "AddJavascriptInterface"})
     @Override
@@ -60,6 +61,7 @@ public class MainActivity extends Activity {
         if (Build.VERSION.SDK_INT >= 26) web.setRendererPriorityPolicy(WebView.RENDERER_PRIORITY_IMPORTANT, false);
 
         hub = new VehicleHub(this, json -> runJs("window.onVehicle && window.onVehicle(" + json + ")"));
+        radio = new RadioBridge(this, json -> runJs("window.onRadio && window.onRadio(" + json + ")"));
         web.addJavascriptInterface(new Bridge(this, hub), "PoloBridge");
         updater = new Updater(this);
         web.loadUrl(Updater.startUrl(this));
@@ -75,6 +77,7 @@ public class MainActivity extends Activity {
         firstStart = false;
         setContentView(root);
         hub.start();
+        radio.start();
         updater.schedule();
         hideSystemBars();
     }
@@ -171,6 +174,7 @@ public class MainActivity extends Activity {
     protected void onDestroy() {
         if (instance == this) instance = null;
         if (hub != null) hub.stop();
+        if (radio != null) radio.stop();
         if (web != null) web.destroy();
         super.onDestroy();
     }

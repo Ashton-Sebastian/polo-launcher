@@ -83,7 +83,7 @@ const TILES = [
     { id: 'phone', label: 'Phone', icon: 'phone', pkgs: ['com.nwd.android.phone'], match: /phone|dialer|bluetooth phone/i },
     { id: 'carplay', label: 'Apple CarPlay', icon: 'carplay', hi: true, pkgs: ZLINK.pkgs, match: ZLINK.match },
     { id: 'btmusic', label: 'Bluetooth Music', icon: 'bt', pkgs: ['com.nwd.bt.music'], match: /bt.?music|bluetooth music|a2dp/i },
-    { id: 'radio', label: 'Radio', icon: 'radio', pkgs: ['com.nwd.radio'], match: /^radio$|\.radio$/i },
+    { id: 'radio', label: 'Radio', icon: 'radio', internal: 'radio' },
     { id: 'usbmusic', label: 'USB Music', icon: 'usb', pkgs: ['com.nwd.android.music.ui'], match: /music/i },
     { id: 'aauto', label: 'Android Auto', icon: 'aauto', hi: true, pkgs: ZLINK.pkgs, match: ZLINK.match },
     { id: 'nav', label: 'Navigation', icon: 'nav', pkgs: ['com.google.android.apps.maps', 'com.waze'], match: /maps|navi|waze/i },
@@ -157,6 +157,7 @@ var order = loadOrder();
 function openTile(id) {
   const t = findTile(id); if (!t) return;
 
+  if (t.internal === 'radio') return openRadio();
   if (t.internal === 'allapps') return openAppSheet(null);
   if (t.internal === 'launcher') return openLauncherSettings();
   const m = mapping[id];
@@ -616,6 +617,131 @@ window.onUpdate = st => {
 };
 $('#updInstall').addEventListener('click', () => { if (B) B.installUpdate(); $('#updBanner').classList.remove('show'); });
 $('#updHide').addEventListener('click', () => { $('#updBanner').classList.remove('show'); toast('You can install it later from Launcher › Updates'); });
+
+/* ---------------- radio (the unit's own FM/AM tuner, via its radio service) ---------------- */
+const RICON = {
+  seekdown: S('<path d="M5 6v12"/><path d="M19 6l-7 6 7 6z" fill="currentColor"/><path d="M12 6l-7 6 7 6z" fill="currentColor"/>'),
+  seekup: S('<path d="M19 6v12"/><path d="M5 6l7 6-7 6z" fill="currentColor"/><path d="M12 6l7 6-7 6z" fill="currentColor"/>'),
+  down: S('<path d="M15 5l-7 7 7 7"/>'),
+  up: S('<path d="M9 5l7 7-7 7"/>'),
+  power: S('<path d="M12 3v8"/><path d="M6.3 6.8a8 8 0 1 0 11.4 0"/>'),
+};
+$$('.rd-controls button').forEach(b => { b.innerHTML = RICON[b.dataset.rc]; });
+let R = B ? {} : { available: true, on: true, band: 0, freq: 9450, ps: 'KFM', rt: 'Best variety of music', stereo: true,
+  presets: [9450, 9750, 9420, 10370, 8870, 10200, 8950, 0, 0, 0, 0, 0].map(f => (f ? { band: 0, freq: f, ps: '' } : {})) };
+let rBank = 0;
+const isFM = f => f >= 5000;
+const FM_MIN = 8750, FM_MAX = 10800, AM_MIN = 522, AM_MAX = 1620;
+function fmtFreq(f) {
+  if (f == null) return '--';
+  return isFM(f) ? (f % 10 ? (f / 100).toFixed(2) : (f / 100).toFixed(1)) : String(f);
+}
+window.onRadio = st => {
+  if (typeof st === 'string') { try { st = JSON.parse(st); } catch (e) { return; } }
+  if (!st) return;
+  R = Object.assign(R, st);
+  if (screen === 'radio') renderRadio();
+};
+function openRadio() {
+  show('radio');
+  if (B) { try { R = Object.assign(R, JSON.parse(B.radioState())); } catch (e) {} B.radioCmd('open', 0, 0); }
+  R.on = true;
+  renderRadio();
+}
+function buildDial(fm) {
+  const sc = $('#rdScale'); sc.innerHTML = '';
+  const lo = fm ? FM_MIN : AM_MIN, hi = fm ? FM_MAX : AM_MAX;
+  const step = fm ? 50 : 18, major = fm ? 200 : 108;
+  for (let f = Math.ceil(lo / step) * step; f <= hi; f += step) {
+    const x = (f - lo) / (hi - lo) * 100;
+    const isMajor = f % major === 0;
+    sc.insertAdjacentHTML('beforeend', `<i class="${isMajor ? 'major' : ''}" style="left:${x}%;height:${isMajor ? 22 : 12}px"></i>`
+      + (isMajor && x > 2 && x < 97 ? `<span style="left:${x}%">${fm ? f / 100 : f}</span>` : ''));
+  }
+  sc.dataset.fm = fm ? '1' : '0';
+}
+function renderRadio() {
+  const fm = R.freq == null ? true : isFM(R.freq);
+  if ($('#rdScale').dataset.fm !== (fm ? '1' : '0')) buildDial(fm);
+  $('#rdPs').textContent = R.available === false ? 'Radio not available' : (R.ps || (R.on === false ? 'Radio off' : 'Radio'));
+  $('#rdFreq').textContent = fmtFreq(R.freq);
+  $('#rdUnit').textContent = fm ? 'MHz' : 'kHz';
+  $('#rdSt').classList.toggle('on', !!R.stereo && fm);
+  $('#rdRt').textContent = R.rt || '';
+  $$('#rdTabs button').forEach(b => b.classList.toggle('on', (b.dataset.band === 'fm') === fm));
+  $('#rdInk').style.transform = `translateX(${fm ? 0 : 100}%)`;
+  const lo = fm ? FM_MIN : AM_MIN, hi = fm ? FM_MAX : AM_MAX;
+  if (R.freq != null) $('#rdNeedle').style.left = Math.max(0, Math.min(100, (R.freq - lo) / (hi - lo) * 100)) + '%';
+  $('.rd-power').classList.toggle('off', R.on === false);
+  // presets 1-6 / 7-12
+  const pr = (R.presets || []).slice(rBank * 6, rBank * 6 + 6);
+  while (pr.length < 6) pr.push({});
+  $('#rdPresets').innerHTML = pr.map((p, i) => {
+    const n = rBank * 6 + i + 1, has = p && p.freq;
+    const cur = has && p.freq === R.freq;
+    return `<button data-slot="${n - 1}" class="${cur ? 'cur' : ''}"><span class="n">${n}</span><span class="f">${has ? fmtFreq(p.freq) : '–'}</span><span class="p">${has ? (p.ps || (isFM(p.freq) ? 'MHz' : 'kHz')) : 'hold to store'}</span></button>`;
+  }).join('') + `<button class="bank" data-bank="1">${rBank ? '1–6' : '7–12'}</button>`;
+}
+function radioCmd(cmd, a, b) { if (B) B.radioCmd(cmd, a || 0, b || 0); else toast('radio: ' + cmd); }
+function tuneTo(f) {
+  const fm = isFM(R.freq || 9000);
+  f = fm ? Math.round(f / 10) * 10 : Math.round(f / 9) * 9;
+  f = Math.max(fm ? FM_MIN : AM_MIN, Math.min(fm ? FM_MAX : AM_MAX, f));
+  R.freq = f; R.ps = ''; R.rt = '';
+  renderRadio();
+  radioCmd('tune', f, R.band || 0);
+}
+$('.rd-controls').addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) return;
+  const c = b.dataset.rc, fm = isFM(R.freq || 9000);
+  if (c === 'seekup') radioCmd('seek', 1);
+  if (c === 'seekdown') radioCmd('seek', 0);
+  if (c === 'up') tuneTo((R.freq || 0) + (fm ? 10 : 9));
+  if (c === 'down') tuneTo((R.freq || 0) - (fm ? 10 : 9));
+  if (c === 'power') { R.on = R.on === false; radioCmd(R.on ? 'play' : 'off'); renderRadio(); }
+});
+$('.rd-tools').addEventListener('click', e => {
+  const b = e.target.closest('[data-rc]'); if (!b) return;
+  if (b.dataset.rc === 'scan') { radioCmd('scan'); toast('Scanning for stations…'); }
+  if (b.dataset.rc === 'ams') { radioCmd('ams'); toast('Finding the strongest stations and storing them…'); }
+});
+$('#rdTabs').addEventListener('click', e => {
+  const b = e.target.closest('[data-band]'); if (!b) return;
+  const wantFM = b.dataset.band === 'fm';
+  if (wantFM !== isFM(R.freq || 9000)) radioCmd('band');
+});
+// presets: tap = tune, hold = store the current station
+(function () {
+  let t, held = false, target = null;
+  const el = $('#rdPresets');
+  el.addEventListener('pointerdown', e => {
+    target = e.target.closest('[data-slot]'); held = false;
+    if (!target) return;
+    target.classList.add('press');
+    t = setTimeout(() => { held = true; target.classList.remove('press'); radioCmd('save', +target.dataset.slot); toast('Stored in preset ' + (+target.dataset.slot + 1)); }, 700);
+  });
+  const end = () => { clearTimeout(t); if (target) target.classList.remove('press'); };
+  el.addEventListener('pointerup', end); el.addEventListener('pointercancel', () => { end(); held = true; });
+  el.addEventListener('click', e => {
+    const bank = e.target.closest('[data-bank]');
+    if (bank) { rBank = rBank ? 0 : 1; renderRadio(); return; }
+    const p = e.target.closest('[data-slot]'); if (!p || held) return;
+    const pr = (R.presets || [])[+p.dataset.slot];
+    if (pr && pr.freq) { R.ps = pr.ps || ''; tuneTo(pr.freq); }
+  });
+})();
+// dial: tap or drag to tune
+(function () {
+  const d = $('#rdDial'); let drag = false;
+  const at = e => {
+    const r = d.getBoundingClientRect(), x = Math.max(0, Math.min(1, (e.clientX - r.left) / r.width));
+    const fm = isFM(R.freq || 9000), lo = fm ? FM_MIN : AM_MIN, hi = fm ? FM_MAX : AM_MAX;
+    return lo + x * (hi - lo);
+  };
+  d.addEventListener('pointerdown', e => { drag = true; d.setPointerCapture && d.setPointerCapture(e.pointerId); const f = at(e); $('#rdNeedle').style.left = ((e.clientX - d.getBoundingClientRect().left) / d.getBoundingClientRect().width * 100) + '%'; $('#rdFreq').textContent = fmtFreq(isFM(f) ? Math.round(f / 10) * 10 : Math.round(f / 9) * 9); });
+  d.addEventListener('pointermove', e => { if (!drag) return; const f = at(e); $('#rdNeedle').style.left = ((e.clientX - d.getBoundingClientRect().left) / d.getBoundingClientRect().width * 100) + '%'; $('#rdFreq').textContent = fmtFreq(isFM(f) ? Math.round(f / 10) * 10 : Math.round(f / 9) * 9); });
+  d.addEventListener('pointerup', e => { if (!drag) return; drag = false; tuneTo(at(e)); });
+})();
 
 /* ---------------- vehicle data ---------------- */
 // Flat schema (also what the Android side sends):

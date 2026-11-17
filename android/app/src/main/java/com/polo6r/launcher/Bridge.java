@@ -96,6 +96,33 @@ public class Bridge {
         return HomeRedirectService.global(name);
     }
 
+    /* ---------- Radio (the unit's built-in tuner) ---------- */
+
+    @JavascriptInterface
+    public String radioState() { return main.radio == null ? "{}" : main.radio.snapshot(); }
+
+    /** cmd: open | refresh | seek(a=1 up) | tune(a=freq, b=band) | scan | stopScan | band | ams | preset(a=1 next) | save(a=slot) */
+    @JavascriptInterface
+    public void radioCmd(String cmd, int a, int b) {
+        RadioBridge r = main.radio;
+        if (r == null) return;
+        switch (cmd) {
+            case "open": r.requestRadioAudio(); r.refresh(); break;
+            case "off": r.stopRadioAudio(); break;
+            case "refresh": r.refresh(); break;
+            case "seek": r.seek(a != 0); break;
+            case "tune": r.tune(a, b); break;
+            case "play": r.requestRadioAudio(); break;
+            case "scan": r.scan(); break;
+            case "stopScan": r.stopScan(); break;
+            case "band": r.changeBand(); break;
+            case "ams": r.autoStore(); break;
+            case "preset": r.preset(a != 0); break;
+            case "save": r.savePreset(a); break;
+            default: break;
+        }
+    }
+
     /* ---------- Updates ---------- */
 
     @JavascriptInterface
