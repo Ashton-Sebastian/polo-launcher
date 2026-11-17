@@ -11,7 +11,7 @@ import org.json.JSONObject;
  *
  *  ss  = this trip      (reset when the car is switched on after being off for 2+ minutes) - shown as Since Start distance
  *  day = today          (reset at the first start of a new day) - Since Start time, consumption and avg. speed
- *  rf  = since refuelling (reset when the fuel level jumps up by 4+ litres)
+ *  rf  = since refuelling (reset when the fuel level jumps up by 2+ litres)
  *  lt  = long-term      (since Polo Launcher first saw the car; reset from the Vehicle screen)
  *
  * Fuel is reported in whole litres, so consumption is shown once at least 1 litre has been used
@@ -19,7 +19,7 @@ import org.json.JSONObject;
  */
 class TripComputer {
     private static final String[] M = {"ss", "day", "rf", "lt"};
-    private static final double REFUEL_JUMP_L = 4;
+    private static final double REFUEL_JUMP_L = 2;
     // Calibrated to the car's own range reading: 250 km with 22 l in the tank (17 Nov 2026) = 11.4 km/l.
     private static final double ESTIMATE_KML = 250.0 / 22.0;
     private static final long NEW_START_AFTER_MS = 2 * 60 * 1000;
