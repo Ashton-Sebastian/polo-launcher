@@ -763,7 +763,7 @@ window.onVehicle = d => {
 
 let tab = 0;
 function setTab(i) {
-  if (i < 0 || i > 0 || i === tab) return; // only "Since Start"
+  if (i < 0 || i > 1 || i === tab) return; // Since Start, Since Refuelling
   tab = i;
   $$('#tabs button').forEach((b, j) => b.classList.toggle('on', j === tab));
   $('#ink').style.transform = `translateX(${tab * 100}%)`;
@@ -771,7 +771,7 @@ function setTab(i) {
   setTimeout(() => { render(); st.classList.remove('fade'); }, 140);
 }
 $('.stats').classList.add('vals');
-gestures($('#vehicle'), { onSwipe: d => setTab(tab + d), onTap: el => el.dataset.tab != null && setTab(+el.dataset.tab) });
+gestures($('#vehicle'), { onTap: el => el.dataset.tab != null && setTab(+el.dataset.tab) });
 $('#consStat').addEventListener('click', () => { settings.units = settings.units === 'kml' ? 'l100' : 'kml'; saveSettings(); render(); });
 
 const num = (v, dp = 0) => (v == null || isNaN(v)) ? '--' : Number(v).toLocaleString('en-US', { minimumFractionDigits: dp, maximumFractionDigits: dp, useGrouping: false });
@@ -810,12 +810,14 @@ function render() {
   if (V.battery_v != null) cl.push(num(V.battery_v, 1) + ' V');
   $('#carLine').textContent = cl.join('  ·  ');
 
-  const p = ['ss', 'rf', 'lt'][tab];
+  // Since Start: distance this trip; time, consumption, avg. speed for today.
+  // Since Refuelling: distance and time since the tank was filled; consumption and avg. speed as Since Start.
+  const p = ['ss', 'rf'][tab];
   const dk = V[p + '_distance_km'];
   $('#sDist').textContent = dk != null && dk < 100 ? num(dk, 1) : num(dk, 0);
   $('#sTime').textContent = hm(V[p + '_time_min']);
-  const c = consumption(p); $('#sCons').textContent = c.v; $('#sConsU').textContent = c.u;
-  $('#sAvg').textContent = num(V[p + '_avg_speed_kmh'], 0);
+  const c = consumption('ss'); $('#sCons').textContent = c.v; $('#sConsU').textContent = c.u;
+  $('#sAvg').textContent = num(V.ss_avg_speed_kmh, 0);
 
   $('#vehicle').classList.toggle('demo', !live && !!demoT);
   renderDoors();

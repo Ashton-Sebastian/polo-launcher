@@ -9,15 +9,16 @@ import org.json.JSONObject;
  * VW-style trip computer worked out from the odometer and fuel level the car sends
  * (this Polo's CAN adapter doesn't send the car's own trip computer values).
  *
- *  ss = since start      (reset when the car is switched on after being off for 2+ minutes)
- *  rf = since refuelling (reset when the fuel level jumps up by 4+ litres)
- *  lt = long-term        (since Polo Launcher first saw the car; reset from the Vehicle screen)
+ *  ss  = this trip      (reset when the car is switched on after being off for 2+ minutes) - shown as Since Start distance
+ *  day = today          (reset at the first start of a new day) - Since Start time, consumption and avg. speed
+ *  rf  = since refuelling (reset when the fuel level jumps up by 4+ litres)
+ *  lt  = long-term      (since Polo Launcher first saw the car; reset from the Vehicle screen)
  *
  * Fuel is reported in whole litres, so consumption is shown once at least 1 litre has been used
  * and gets more accurate the further you drive.
  */
 class TripComputer {
-    private static final String[] M = {"ss", "rf", "lt"};
+    private static final String[] M = {"ss", "day", "rf", "lt"};
     private static final double REFUEL_JUMP_L = 4;
     // Calibrated to the car's own range reading: 250 km with 22 l in the tank (17 Nov 2026) = 11.4 km/l.
     private static final double ESTIMATE_KML = 250.0 / 22.0;
@@ -25,7 +26,7 @@ class TripComputer {
 
     private final SharedPreferences p;
     private long lastTick;
-    private boolean pendingStartReset;
+    private boolean pendingStartReset, pendingDayReset;
 
     TripComputer(Context c) {
         p = c.getSharedPreferences("polo_trip", Context.MODE_PRIVATE);
@@ -40,7 +41,12 @@ class TripComputer {
         carOn();
     }
 
+    private static String today() {
+        return new java.text.SimpleDateFormat("yyyyMMdd", java.util.Locale.US).format(new java.util.Date());
+    }
+
     private synchronized void carOn() {
+        if (!today().equals(p.getString("day_date", ""))) pendingDayReset = true; // first start of a new day
         long off = p.getLong("off_at", 0);
         if (off <= 0) return;
         if (System.currentTimeMillis() - off >= NEW_START_AFTER_MS) pendingStartReset = true;
@@ -63,7 +69,15 @@ class TripComputer {
             SharedPreferences.Editor e = p.edit();
 
             if (!p.contains("lt_odo")) { for (String m : M) reset(m, odo); }
+            if (!p.contains("day_odo")) {                       // upgrade: today so far = this trip so far
+                SharedPreferences.Editor u = p.edit();
+                for (String k : new String[]{"_odo", "_min", "_used", "_int"})
+                    u.putFloat("day" + k, p.getFloat("ss" + k, k.equals("_odo") ? (float) odo : 0));
+                u.putString("day_date", today()).apply();
+                pendingDayReset = false;
+            }
             if (pendingStartReset) { reset("ss", odo); pendingStartReset = false; }
+            if (pendingDayReset) { reset("day", odo); p.edit().putString("day_date", today()).apply(); pendingDayReset = false; }
 
             // time with the car on (updates arrive every few seconds; ignore gaps = car was off)
             double speed = Math.max(0, car.optDouble("speed_kmh", 0));
@@ -76,7 +90,7 @@ class TripComputer {
             }
             lastTick = now;
 
-            if (!Double.isNaN(fuel)) {
+            if (!Double.isNaN(fuel) && fuel > 0) {                // 0 = no reading yet, not an empty tank
                 double low = p.getFloat("fuel_low", (float) fuel);
                 if (fuel >= low + REFUEL_JUMP_L) {               // refuelled
                     e.putFloat("rf_odo", (float) odo).putFloat("rf_min", 0).putFloat("rf_used", 0).putFloat("rf_int", 0);
@@ -104,8 +118,13 @@ class TripComputer {
                 if (used >= 1 && dist > 0) {
                     double kml = dist / used;
                     out.put(m + "_consumption_kml", kml);
-                    if (!m.equals("ss") && used >= 3 && Double.isNaN(bestKml)) bestKml = kml; // rf first, then lt
+                    if ((m.equals("rf") || m.equals("lt")) && used >= 3 && Double.isNaN(bestKml)) bestKml = kml; // rf first, then lt
                 }
+            }
+            // Since Start: distance is this trip; time, consumption and average speed are for today
+            for (String k : new String[]{"_time_min", "_avg_speed_kmh", "_consumption_kml"}) {
+                out.remove("ss" + k);
+                if (out.has("day" + k)) out.put("ss" + k, out.get("day" + k));
             }
             if (!Double.isNaN(fuel)) {
                 if (!Double.isNaN(bestKml)) {
