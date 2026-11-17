@@ -30,6 +30,11 @@ public class HomeRedirectService extends AccessibilityService {
     private final Set<String> homeComponents = new HashSet<>();
     private final Set<String> extraPkgs = new HashSet<>();
     private long lastRedirect;
+    /** Physical button presses: the unit broadcasts a key number (10 = Phone, 4 = Radio, 20 = Home). */
+    private static final String ACTION_KEY = "com.nwd.action.ACTION_KEY_VALUE";
+    private static final byte KEY_PHONE = 10;
+    private static final String PHONE_PKG = "com.nwd.android.phone", ZLINK_PKG = "com.zjinnova.zlink";
+    private volatile long lastPhoneKeyAt;
     private String lastPkg = "";
 
     private android.content.BroadcastReceiver screenRx;
@@ -43,11 +48,16 @@ public class HomeRedirectService extends AccessibilityService {
             @Override public void onReceive(Context c, Intent i) {
                 if (Intent.ACTION_SCREEN_OFF.equals(i.getAction())) SplashActivity.onScreenOff(c);
                 else if (Intent.ACTION_SCREEN_ON.equals(i.getAction())) SplashActivity.maybeShow(c);
+                else if (ACTION_KEY.equals(i.getAction())) {
+                    byte key = i.getByteExtra("extra_key_value", (byte) 0);
+                    if (key == KEY_PHONE) lastPhoneKeyAt = System.currentTimeMillis();
+                }
             }
         };
         android.content.IntentFilter f = new android.content.IntentFilter();
         f.addAction(Intent.ACTION_SCREEN_ON);
         f.addAction(Intent.ACTION_SCREEN_OFF);
+        f.addAction(ACTION_KEY);
         registerReceiver(screenRx, f);
         // the unit may close apps while the car is off; if we were restarted after the car came on, show the logo now
         SplashActivity.maybeShow(this);
@@ -99,6 +109,16 @@ public class HomeRedirectService extends AccessibilityService {
         }
         boolean isOldHome = homeComponents.contains(pkg + "/" + cls) || extraPkgs.contains(pkg);
         long now = System.currentTimeMillis();
+        // the unit's Phone button -> CarPlay (ZLink). Only right after the button, so incoming calls still show.
+        if (pkg.equals(PHONE_PKG) && now - lastPhoneKeyAt < 2500) {
+            lastPhoneKeyAt = 0;
+            Intent z = getPackageManager().getLaunchIntentForPackage(ZLINK_PKG);
+            if (z != null) {
+                z.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_NO_ANIMATION);
+                try { startActivity(z); } catch (Exception ignored) { }
+                return;
+            }
+        }
         // the unit's radio button (and the stock radio app) -> Polo Launcher's own radio screen
         if ((pkg.equals("com.nwd.radio") || pkg.equals("com.nwd.radiostation")) && now - lastRedirect > 700) {
             lastRedirect = now;
