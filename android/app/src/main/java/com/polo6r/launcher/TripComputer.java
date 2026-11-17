@@ -26,17 +26,25 @@ class TripComputer {
     private final SharedPreferences p;
     private long lastTick;
     private boolean pendingStartReset;
-    private long screenOffAt;
 
     TripComputer(Context c) {
         p = c.getSharedPreferences("polo_trip", Context.MODE_PRIVATE);
+        // the app may have been closed while the car was off: check the saved switch-off time now
+        android.os.PowerManager pm = (android.os.PowerManager) c.getSystemService(Context.POWER_SERVICE);
+        if (pm == null || pm.isInteractive()) carOn();
     }
 
-    /** Head unit screen off / on = car off / on. */
+    /** Head unit screen off / on = car off / on. The switch-off time is saved so it survives the app being closed. */
     synchronized void onScreen(boolean on) {
-        long now = System.currentTimeMillis();
-        if (!on) { screenOffAt = now; lastTick = 0; return; }
-        if (screenOffAt > 0 && now - screenOffAt >= NEW_START_AFTER_MS) pendingStartReset = true;
+        if (!on) { p.edit().putLong("off_at", System.currentTimeMillis()).apply(); lastTick = 0; return; }
+        carOn();
+    }
+
+    private synchronized void carOn() {
+        long off = p.getLong("off_at", 0);
+        if (off <= 0) return;
+        if (System.currentTimeMillis() - off >= NEW_START_AFTER_MS) pendingStartReset = true;
+        p.edit().remove("off_at").apply();
     }
 
     synchronized void resetLongTerm() {
