@@ -42,7 +42,7 @@ button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
 /* ---------- status ---------- */
 .status{position:absolute;right:30px;top:22px;height:56px;display:flex;align-items:center;font-size:28px;font-weight:700}
 .status .bt{width:24px;height:30px}
-.status .temp{font-size:24px;font-weight:500;color:var(--text-dim)}
+.status .temp{font-size:26px;font-weight:600;color:#fff}
 .fuelchip{display:flex;align-items:center;font-size:22px;font-weight:600;padding:6px 12px;border-radius:14px;background:rgba(0,16,48,.32)}
 .fuelchip .ic{width:22px;height:26px}
 .fuelchip .mini{width:58px;height:10px;border-radius:5px;background:rgba(255,255,255,.22);overflow:hidden}
@@ -204,3 +204,18 @@ pre.diag.tall{max-height:none}
 .status .net{width:30px;height:30px}
 .status .net .dim{opacity:.28}
 .status .net.off{opacity:.55}
+
+/* odometer / speed / rpm line on the Vehicle screen */
+.carline{margin-top:16px;font-size:20px;color:var(--text-dim);white-space:nowrap}
+
+/* arranging tiles */
+.editbar{position:absolute;left:0;right:0;top:70px;display:none;justify-content:center;align-items:center}
+.editing .editbar{display:flex}
+.editbar span{font-size:20px;color:var(--text-dim);margin-right:16px}
+.editing .dots{display:none}
+@keyframes jiggle{from{transform:rotate(-1.8deg)}to{transform:rotate(1.8deg)}}
+.editing .tile .sq{animation:jiggle .15s ease-in-out infinite alternate}
+.editing .tile:nth-child(2n) .sq{animation-delay:.075s}
+.tile.dragging{opacity:.15}
+.dragclone{position:absolute;z-index:40;pointer-events:none;width:240px}
+.dragclone .sq{transform:scale(1.12);box-shadow:0 18px 40px rgba(0,8,30,.55)}

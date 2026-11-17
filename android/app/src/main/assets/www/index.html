@@ -15,12 +15,12 @@
   <div class="handle"></div>
 
   <div class="status">
+    <span id="tempTxt" class="temp"></span>
     <button class="fuelchip" id="fuelChip" aria-label="Fuel level">
       <span class="ic" data-icon="pump"></span>
       <span class="mini"><i id="fuelMini"></i></span>
       <span id="fuelPct">--%</span>
     </button>
-    <span id="tempTxt" class="temp"></span>
     <span class="ic net" id="netIcon" aria-label="Network"></span>
     <span class="ic bt" data-icon="bt"></span>
     <span id="clock">--:--</span>
@@ -31,6 +31,7 @@
     <section id="home" class="screen active">
       <div class="pager" id="pager"><div class="pages" id="pages"></div></div>
       <div class="dots" id="dots"></div>
+      <div class="editbar"><span>Drag tiles to move them · hold at the edge to change page · tap to change the app</span><button id="editDone" class="btn">Done</button></div>
       <div class="def-banner" id="updBanner">
         <button id="updInstall">Update available – tap to install</button>
         <button id="updHide" aria-label="Hide">✕</button>
@@ -66,6 +67,7 @@
             </div>
             <div class="ends"><span>E</span><span id="fuelText">-- l</span><span>F</span></div>
           </div>
+          <div class="carline" id="carLine"></div>
         </div>
         <div class="car"><img src="car.png" alt="" id="carImg"></div>
       </div>

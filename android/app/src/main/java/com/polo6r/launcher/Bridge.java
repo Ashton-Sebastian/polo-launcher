@@ -248,6 +248,13 @@ public class Bridge {
 
     /* ---------- vehicle ---------- */
 
+    /** Everything Car Info sends (all CarInfo fields with a value + raw CAN frames), for mapping / diagnostics. */
+    @JavascriptInterface
+    public void resetLongTerm() { hub.resetLongTerm(); }
+
+    @JavascriptInterface
+    public String getRawCarData() { return hub.rawCarData(); }
+
     @JavascriptInterface
     public String getVehicle() {
         return hub.snapshot();

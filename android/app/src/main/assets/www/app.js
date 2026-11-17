@@ -112,9 +112,9 @@ function tileEl(t) {
 const pagesEl = $('#pages'), dotsEl = $('#dots');
 function buildHome() {
   pagesEl.innerHTML = ''; dotsEl.innerHTML = '';
-  TILES.forEach((page, i) => {
+  order.forEach((ids, i) => {
     const p = document.createElement('div'); p.className = 'page';
-    page.forEach(t => p.appendChild(tileEl(t)));
+    ids.map(findTile).filter(Boolean).forEach(t => p.appendChild(tileEl(t)));
     pagesEl.appendChild(p);
     const d = document.createElement('i'); if (i === homePage) d.className = 'on'; dotsEl.appendChild(d);
   });
@@ -122,13 +122,30 @@ function buildHome() {
 }
 let homePage = 0;
 function setPage(i, anim = true) {
-  homePage = Math.max(0, Math.min(TILES.length - 1, i));
+  homePage = Math.max(0, Math.min(order.length - 1, i));
   pagesEl.style.transition = anim ? '' : 'none';
   pagesEl.style.transform = `translateX(${-homePage * 100}%)`;
   $$('#dots i').forEach((d, j) => d.classList.toggle('on', j === homePage));
 }
 const ALL_TILES = [].concat.apply([], TILES);
 const findTile = id => ALL_TILES.find(t => t.id === id);
+
+// Tile arrangement (hold a tile to move it). Saved per page; new tiles in future updates are added at the end.
+function loadOrder() {
+  const saved = store.get('tileOrder', null);
+  let o = Array.isArray(saved) ? saved.map(p => (Array.isArray(p) ? p : []).filter(id => findTile(id))) : TILES.map(p => p.map(t => t.id));
+  const seen = {}; o.forEach(p => p.forEach(id => { seen[id] = 1; }));
+  ALL_TILES.forEach(t => {
+    if (seen[t.id]) return;
+    let last = o[o.length - 1];
+    if (!last || last.length >= 8) { last = []; o.push(last); }
+    last.push(t.id);
+  });
+  o = o.filter(p => p.length);
+  while (o.length < 2) o.push([]);
+  return o;
+}
+var order = loadOrder();
 
 function openTile(id) {
   const t = findTile(id); if (!t) return;
@@ -157,14 +174,15 @@ function launchPkg(pkg, label) {
 }
 
 /* ---------------- pointer handling (swipe, tap, long-press) ---------------- */
-function gestures(el, { onSwipe, onTap, onLong }) {
+function gestures(el, { onSwipe, onTap, onLong, skip }) {
   let x0, y0, t0, moved, longT, target, dragging = false;
   el.addEventListener('pointerdown', e => {
+    if (skip && skip()) return;
     x0 = e.clientX; y0 = e.clientY; t0 = Date.now(); moved = false; dragging = true;
     target = e.target.closest('[data-id],[data-tab]');
     if (target) target.classList.add('press');
     clearTimeout(longT);
-    if (onLong && target) longT = setTimeout(() => { if (!moved) { dragging = false; target.classList.remove('press'); onLong(target); } }, 650);
+    if (onLong && target) longT = setTimeout(() => { if (!moved) { dragging = false; target.classList.remove('press'); onLong(target, x0, y0); } }, 650);
   });
   el.addEventListener('pointermove', e => {
     if (!dragging) return;
@@ -186,7 +204,97 @@ const stageScale = () => stage.getBoundingClientRect().width / 1280;
 gestures($('#pager'), {
   onSwipe: d => setPage(homePage + d),
   onTap: el => openTile(el.dataset.id),
-  onLong: el => { const t = findTile(el.dataset.id); if (t && !t.internal) openAppSheet(t.id); },
+  onLong: (el, x, y) => enterEdit(el, x, y),
+  skip: () => editing,
+});
+
+/* ---------------- arrange tiles: hold, then drag ---------------- */
+let editing = false, drag = null, edgeT = null;
+function enterEdit(tileEl, x, y) {
+  editing = true;
+  $('#home').classList.add('editing');
+  if (tileEl) drag = { id: tileEl.dataset.id, x0: x, y0: y, moved: false, clone: null, fromLong: true };
+  if (tileEl) markDragging();
+}
+function exitEdit() {
+  editing = false; drag = null; clearTimeout(edgeT);
+  $('#home').classList.remove('editing');
+  store.set('tileOrder', order);
+}
+$('#editDone').addEventListener('click', exitEdit);
+function markDragging() {
+  $$('#pages .tile').forEach(t => t.classList.toggle('dragging', !!drag && drag.moved && t.dataset.id === drag.id));
+}
+function toStage(e) {
+  const r = stage.getBoundingClientRect(), s = r.width / 1280;
+  return { x: (e.clientX - r.left) / s, y: (e.clientY - r.top) / s };
+}
+function pageOf(id) { return order.findIndex(p => p.indexOf(id) >= 0); }
+function moveTo(id, pageIdx, idx) {
+  const from = pageOf(id); if (from < 0) return;
+  order[from].splice(order[from].indexOf(id), 1);
+  const dest = order[pageIdx];
+  idx = Math.max(0, Math.min(dest.length, idx));
+  dest.splice(idx, 0, id);
+  if (dest.length > 8) {            // page full: push its last tile on to the next page
+    const spill = dest.pop();
+    if (!order[pageIdx + 1]) order.push([]);
+    order[pageIdx + 1].unshift(spill);
+  }
+  order = order.filter((p, i) => p.length || i < 2);
+  buildHome(); markDragging();
+}
+document.getElementById('pager').addEventListener('pointerdown', e => {
+  if (!editing) return;
+  const t = e.target.closest('.tile'); if (!t) return;
+  drag = { id: t.dataset.id, x0: e.clientX, y0: e.clientY, moved: false, clone: null };
+});
+addEventListener('pointermove', e => {
+  if (!drag) return;
+  const s = stageScale();
+  if (!drag.moved) {
+    if (Math.abs(e.clientX - drag.x0) / s < 12 && Math.abs(e.clientY - drag.y0) / s < 12) return;
+    drag.moved = true;
+    const src = $$('#pages .tile').find(t => t.dataset.id === drag.id);
+    drag.clone = src.cloneNode(true); drag.clone.className = 'tile dragclone';
+    stage.appendChild(drag.clone); markDragging();
+  }
+  const p = toStage(e);
+  drag.clone.style.left = (p.x - 120) + 'px'; drag.clone.style.top = (p.y - 70) + 'px';
+  // drop position on the current page: nearest tile slot
+  const page = pagesEl.children[homePage];
+  const tiles = Array.prototype.slice.call(page.children);
+  let best = tiles.length, bestD = 1e9;
+  tiles.forEach((t, i) => {
+    const r = t.getBoundingClientRect(), cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+    const d = Math.hypot(e.clientX - cx, e.clientY - cy);
+    if (d < bestD) { bestD = d; best = i; }
+  });
+  const cur = order[homePage].indexOf(drag.id);
+  if (cur !== best && bestD / s < 140) moveTo(drag.id, homePage, best);
+  else if (cur < 0 && bestD / s < 140) moveTo(drag.id, homePage, best);
+  // hold at the left / right edge to move to the other page
+  const pr = $('#pager').getBoundingClientRect(), edge = 60 * s;
+  const dir = e.clientX < pr.left + edge ? -1 : e.clientX > pr.right - edge ? 1 : 0;
+  if (dir && !edgeT && order[homePage + dir]) {
+    edgeT = setTimeout(() => {
+      edgeT = null;
+      if (!drag) return;
+      setPage(homePage + dir);
+      moveTo(drag.id, homePage, dir > 0 ? 0 : order[homePage].length);
+    }, 700);
+  } else if (!dir && edgeT) { clearTimeout(edgeT); edgeT = null; }
+});
+addEventListener('pointerup', () => {
+  if (!drag) return;
+  const d = drag; drag = null; clearTimeout(edgeT); edgeT = null;
+  if (d.clone) d.clone.remove();
+  markDragging();
+  store.set('tileOrder', order);
+  if (!d.moved && editing && !d.fromLong) {       // tap while arranging = change the tile's app
+    const t = findTile(d.id);
+    if (t && !t.internal) openAppSheet(t.id); else toast('This tile is built in');
+  }
 });
 
 /* ---------------- screens ---------------- */
@@ -196,8 +304,8 @@ function show(name) {
   $$('.screen').forEach(s => s.classList.toggle('active', s.id === name));
   if (name === 'vehicle') render();
 }
-window.goHome = () => { closeSheet(); show('home'); setPage(0); };
-window.onBack = () => { if ($('#sheet').classList.contains('open')) closeSheet(); else if (screen !== 'home') show('home'); };
+window.goHome = () => { if (editing) exitEdit(); closeSheet(); show('home'); setPage(0); };
+window.onBack = () => { if (editing) return exitEdit(); if ($('#sheet').classList.contains('open')) closeSheet(); else if (screen !== 'home') show('home'); };
 window.onResumeLauncher = () => { tick(); refreshDefault(); try { refreshNet(); } catch (e) {} };
 
 /* ---------------- default home screen ---------------- */
@@ -345,18 +453,20 @@ function openLauncherSettings() {
       <button data-v="true" class="${settings.demo ? 'on' : ''}">On</button><button data-v="false" class="${!settings.demo ? 'on' : ''}">Off</button></div></div>
     <div class="row"><div>Default home screen<div class="sub" id="defSub">${!B ? 'Only available on the head unit' : (B.isDefaultLauncher() ? 'Polo Launcher opens when you press Home' : 'Another app opens when you press Home')}</div></div>
       ${!B ? '' : (B.isDefaultLauncher() ? '<button class="btn ok" data-default="1">✓ Default</button>' : '<button class="btn" data-default="1">Make default</button>')}</div>
-    <div class="row"><div>App assignments<div class="sub">Long-press any tile to change its app</div></div><button class="btn" data-reset="1">Reset all</button></div>
+    <div class="row"><div>Tiles<div class="sub">Hold a tile to move it or change its app</div></div><button class="btn" data-reset="1">Reset layout</button></div>
+    <div class="row"><div>Long-term trip data<div class="sub">Start the long-term memory again from today</div></div><button class="btn" data-ltreset="1">Reset</button></div>
     <div class="row" style="display:block;border:0"><div>Diagnostics <span class="sub">(send this to whoever is setting up the vehicle data)</span></div><pre class="diag">${diag.replace(/</g, '&lt;')}</pre></div>`);
   sheetBody.onclick = e => {
     if (e.target.closest('[data-default]')) { if (B) B.requestDefaultLauncher(); closeSheet(); return; }
     const rs = e.target.closest('[data-railslot]'); if (rs) return openRailSheet(+rs.dataset.railslot);
     if (e.target.closest('[data-homefix]')) return openHomeFixSheet();
     if (e.target.closest('[data-cardata]')) return openCarDataSheet();
+    if (e.target.closest('[data-ltreset]')) { if (B) B.resetLongTerm(); toast('Long-term trip data reset'); return; }
     if (e.target.closest('[data-splashprev]')) { if (B) B.showSplash(); else toast('Only on the head unit'); return; }
     if (e.target.closest('[data-updcheck]')) { if (B) B.checkUpdates(); else toast('Only on the head unit'); return; }
     if (e.target.closest('[data-updsrc]')) return openUpdateSourceSheet();
     const r = e.target.closest('[data-reset]');
-    if (r) { mapping = {}; store.set('mapping', mapping); buildHome(); toast('App assignments cleared'); return; }
+    if (r) { mapping = {}; store.set('mapping', mapping); order = TILES.map(p => p.map(t => t.id)); store.set('tileOrder', order); buildHome(); toast('Tiles and app assignments reset'); return; }
     const b = e.target.closest('.seg button'); if (!b) return;
     const key = b.parentElement.dataset.set; let v = b.dataset.v;
     if (key === 'splash') { const on = v === 'true'; if (B) B.setSplashOnStart(on); b.parentElement.querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b)); return; }
@@ -405,6 +515,8 @@ function openCarDataSheet() {
       2. Tap <b>Start scan</b> and keep this screen open for about 2 minutes – drive if you can.<br>
       3. Tap <b>Save report</b> and send the file from the unit's <b>Download</b> folder (or photos of this screen).</div></div>
     <div class="row"><div id="scanState">${esc(scanState)}</div><div style="white-space:nowrap"><button class="btn" data-scan="1">Start scan</button><button class="btn" data-save="1">Save report</button></div></div>
+    <div class="sub" style="margin-top:12px">Live from Car Info</div>
+    <pre class="diag" id="carRaw">${esc(B ? B.getRawCarData() : 'Only on the head unit')}</pre>
     <div class="sub" style="margin-top:12px">Live car messages</div>
     <pre class="diag" id="sniff">${esc(sniffLog.slice(-60).join('\n')) || 'Nothing yet…'}</pre>
     <div class="sub" style="margin-top:12px">What was found</div>
@@ -543,6 +655,12 @@ function render() {
   $('#fuelFill').style.width = (pct == null ? 0 : Math.max(1.5, Math.min(100, pct))) + '%';
   $('#fuelText').textContent = litres == null ? '-- l' : `${num(litres, 0)} l · ${Math.round(pct)}%`;
   $('#fuelBox').classList.toggle('low', low);
+  const cl = [];
+  if (V.odometer_km != null) cl.push(num(V.odometer_km) + ' km');
+  if (V.speed_kmh != null) cl.push(num(V.speed_kmh) + ' km/h');
+  if (V.rpm != null) cl.push(num(V.rpm) + ' rpm');
+  if (V.battery_v != null) cl.push(num(V.battery_v, 1) + ' V');
+  $('#carLine').textContent = cl.join('  ·  ');
 
   const p = ['ss', 'rf', 'lt'][tab];
   $('#sDist').textContent = num(V[p + '_distance_km'], 0);
