@@ -296,7 +296,12 @@ public class Bridge {
 
     /** Called by the page once its screens are drawn (the start-up logo waits for this). */
     @JavascriptInterface
-    public void pageReady() { MainActivity.webReadyAt = System.currentTimeMillis(); }
+    public void pageReady() {
+        MainActivity.webReadyAt = System.currentTimeMillis();
+        MainActivity a = MainActivity.instance;
+        String s = MainActivity.pendingScreen;
+        if (a != null && s != null) a.runOnUiThread(() -> a.openScreen(s));
+    }
 
     @JavascriptInterface
     public boolean getSplashOnStart() { return SplashActivity.enabled(act); }

@@ -20,6 +20,9 @@ public class MainActivity extends Activity {
     static volatile MainActivity instance;
     /** When the web screens last finished drawing (0 = not yet). */
     static volatile long webReadyAt;
+    static final String EXTRA_SCREEN = "polo_screen";
+    /** Screen to show once the page has loaded (opened from the radio button before the page was ready). */
+    static volatile String pendingScreen;
 
     private WebView web;
     Updater updater;
@@ -30,6 +33,7 @@ public class MainActivity extends Activity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        if (getIntent() != null && "radio".equals(getIntent().getStringExtra(EXTRA_SCREEN))) pendingScreen = "radio";
         HomeRedirectService.ensureEnabled(this);
         instance = this;
         webReadyAt = 0;
@@ -129,8 +133,15 @@ public class MainActivity extends Activity {
     @Override
     protected void onNewIntent(Intent intent) {
         super.onNewIntent(intent);
+        if ("radio".equals(intent.getStringExtra(EXTRA_SCREEN))) { openScreen("radio"); return; }
         // Home pressed while we are already in front -> back to the first home page
         runJs("window.goHome && window.goHome()");
+    }
+
+    void openScreen(String screen) {
+        if (webReadyAt == 0) { pendingScreen = screen; return; }
+        pendingScreen = null;
+        if ("radio".equals(screen)) runJs("window.openRadio && window.openRadio()");
     }
 
     @Override

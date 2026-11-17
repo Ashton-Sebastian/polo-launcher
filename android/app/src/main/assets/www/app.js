@@ -642,6 +642,7 @@ window.onRadio = st => {
   R = Object.assign(R, st);
   if (screen === 'radio') renderRadio();
 };
+window.openRadio = () => openRadio();
 function openRadio() {
   show('radio');
   if (B) { try { R = Object.assign(R, JSON.parse(B.radioState())); } catch (e) {} B.radioCmd('open', 0, 0); }

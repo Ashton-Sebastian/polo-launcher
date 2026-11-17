@@ -99,6 +99,14 @@ public class HomeRedirectService extends AccessibilityService {
         }
         boolean isOldHome = homeComponents.contains(pkg + "/" + cls) || extraPkgs.contains(pkg);
         long now = System.currentTimeMillis();
+        // the unit's radio button (and the stock radio app) -> Polo Launcher's own radio screen
+        if ((pkg.equals("com.nwd.radio") || pkg.equals("com.nwd.radiostation")) && now - lastRedirect > 700) {
+            lastRedirect = now;
+            Intent i = new Intent(this, MainActivity.class).putExtra(MainActivity.EXTRA_SCREEN, "radio")
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_REORDER_TO_FRONT | Intent.FLAG_ACTIVITY_NO_ANIMATION);
+            try { startActivity(i); } catch (Exception ignored) { }
+            return;
+        }
         if (isOldHome && now - lastRedirect > 700) {
             lastRedirect = now;
             Intent i = new Intent(this, MainActivity.class)
