@@ -14,12 +14,15 @@ import android.widget.ImageView;
  */
 class SplashView extends FrameLayout {
     static final long SHOW_MS = 2300;
+    static final long MAX_MS = 9000;
+
+    interface Ready { boolean ready(); }
 
     private final ImageView logo;
     private final View glow;
     private final GradientDrawable bg;
 
-    SplashView(Context c, Runnable onDone) {
+    SplashView(Context c, Ready ready, Runnable onDone) {
         super(c);
         bg = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, new int[]{0xFF0A2B63, 0xFF000610});
         bg.setGradientType(GradientDrawable.RADIAL_GRADIENT);
@@ -45,7 +48,18 @@ class SplashView extends FrameLayout {
             logo.animate().alpha(1f).scaleX(1f).scaleY(1f).setDuration(900).setInterpolator(new DecelerateInterpolator(2f)).start();
             glow.animate().alpha(1f).setDuration(1400).start();
         });
-        postDelayed(() -> animate().alpha(0f).setDuration(450).withEndAction(onDone).start(), SHOW_MS);
+        final long start = System.currentTimeMillis();
+        // stay up until the launcher screens are actually drawn, so there is never a dark screen after the logo
+        Runnable tryFinish = new Runnable() {
+            @Override public void run() {
+                if (ready.ready() || System.currentTimeMillis() - start > MAX_MS) {
+                    animate().alpha(0f).setDuration(450).withEndAction(onDone).start();
+                } else {
+                    postDelayed(this, 150);
+                }
+            }
+        };
+        postDelayed(tryFinish, SHOW_MS);
     }
 
     @Override

@@ -80,26 +80,27 @@ const ZLINK = { pkgs: ['com.zjinnova.zlink', 'com.zjinnova.zlink5', 'com.zjinnov
 const TILES = [
   [
     { id: 'vehicle', label: 'Vehicle', icon: 'car', internal: 'vehicle' },
-    { id: 'usbvideo', label: 'USB Video', icon: 'video' },
-    { id: 'phone', label: 'Phone', icon: 'phone' },
+    { id: 'usbvideo', label: 'USB Video', icon: 'video', pkgs: ['com.nwd.android.video.ui'], match: /video/i },
+    { id: 'phone', label: 'Phone', icon: 'phone', pkgs: ['com.nwd.android.phone'], match: /phone|dialer|bluetooth phone/i },
     { id: 'carplay', label: 'Apple CarPlay', icon: 'carplay', hi: true, pkgs: ZLINK.pkgs, match: ZLINK.match },
-    { id: 'btmusic', label: 'Bluetooth Music', icon: 'bt' },
-    { id: 'radio', label: 'Radio', icon: 'radio' },
-    { id: 'usbmusic', label: 'USB Music', icon: 'usb' },
+    { id: 'btmusic', label: 'Bluetooth Music', icon: 'bt', pkgs: ['com.nwd.bt.music'], match: /bt.?music|bluetooth music|a2dp/i },
+    { id: 'radio', label: 'Radio', icon: 'radio', pkgs: ['com.nwd.radio'], match: /^radio$|\.radio$/i },
+    { id: 'usbmusic', label: 'USB Music', icon: 'usb', pkgs: ['com.nwd.android.music.ui'], match: /music/i },
     { id: 'aauto', label: 'Android Auto', icon: 'aauto', hi: true, pkgs: ZLINK.pkgs, match: ZLINK.match },
   ],
   [
-    { id: 'nav', label: 'Navigation', icon: 'nav' },
-    { id: 'settings', label: 'Settings', icon: 'gear', intent: 'android.settings.SETTINGS' },
-    { id: 'gallery', label: 'Pictures', icon: 'image' },
-    { id: 'files', label: 'Files', icon: 'folder' },
-    { id: 'eq', label: 'Sound', icon: 'eq' },
-    { id: 'browser', label: 'Browser', icon: 'globe' },
+    { id: 'nav', label: 'Navigation', icon: 'nav', pkgs: ['com.google.android.apps.maps', 'com.waze'], match: /maps|navi|waze/i },
+    { id: 'settings', label: 'Settings', icon: 'gear', pkgs: ['com.android.car.setting', 'com.android.settings'], intent: 'android.settings.SETTINGS' },
+    { id: 'gallery', label: 'Pictures', icon: 'image', pkgs: ['com.alensw.PicFolder', 'com.google.android.apps.photos'], match: /gallery|photo|pic/i },
+    { id: 'files', label: 'Files', icon: 'folder', pkgs: ['com.nwd.filemanager'], match: /file/i },
+    { id: 'eq', label: 'Sound', icon: 'eq', pkgs: ['com.nwd.audioset'], match: /audio|dsp|equali[sz]er|sound/i },
+    { id: 'browser', label: 'Browser', icon: 'globe', pkgs: ['com.android.chrome', 'org.mozilla.firefox'], match: /browser|chrome/i },
     { id: 'allapps', label: 'All apps', icon: 'apps', internal: 'allapps' },
     { id: 'launcher', label: 'Launcher', icon: 'sliders', internal: 'launcher' },
   ],
 ];
 let mapping = store.get('mapping', {}); // tileId -> {pkg,label}
+if (!store.get('mapFix15', false)) { mapping = {}; store.set('mapping', mapping); store.set('mapFix15', true); }
 
 function tileEl(t) {
   const el = document.createElement('button');
@@ -159,7 +160,7 @@ function openTile(id) {
     const hit = (t.pkgs || []).map(p => apps.find(a => a.pkg === p)).find(Boolean)
       || (t.match && apps.find(a => t.match.test(a.pkg) || t.match.test(a.label)));
     if (hit) return launchPkg(hit.pkg, t.label);
-    toast('ZLink not found – choose the app to use');
+    toast(t.label + ': app not found – choose the one to use');
   }
   if (t.intent) {
     if (B) { if (!B.openAction(t.intent)) toast('Could not open ' + t.label); }
@@ -306,7 +307,7 @@ function show(name) {
 }
 window.goHome = () => { if (editing) exitEdit(); closeSheet(); show('home'); setPage(0); };
 window.onBack = () => { if (editing) return exitEdit(); if ($('#sheet').classList.contains('open')) closeSheet(); else if (screen !== 'home') show('home'); };
-window.onResumeLauncher = () => { tick(); refreshDefault(); try { refreshNet(); } catch (e) {} };
+window.onResumeLauncher = () => { tick(); refreshDefault(); try { refreshNet(); refreshFix(); } catch (e) {} };
 
 /* ---------------- default home screen ---------------- */
 // Banner on the home screen until Polo Launcher is the default Home app (hide it with ✕).
@@ -316,6 +317,14 @@ function refreshDefault() {
   $('#defBanner').classList.toggle('show', !isDef && !store.get('hideDefBanner', false));
 }
 window.refreshDefault = refreshDefault;
+// Home button fix switched off by the unit? Offer to switch it back on (it also brings the logo when the car starts).
+function refreshFix() {
+  let off = false;
+  try { off = !!B && !homeFix().on; } catch (e) {}
+  $('#fixBanner').classList.toggle('show', off && !sessionStorage.getItem('hideFix'));
+}
+$('#fixOn').addEventListener('click', () => { if (B) B.openAccessibilitySettings(); });
+$('#fixHide').addEventListener('click', () => { try { sessionStorage.setItem('hideFix', '1'); } catch (e) {} refreshFix(); });
 $('#defMake').addEventListener('click', () => { if (B) B.requestDefaultLauncher(); });
 $('#defHide').addEventListener('click', () => { store.set('hideDefBanner', true); refreshDefault(); toast('You can still do this from Launcher settings'); });
 
@@ -380,7 +389,10 @@ $('#fuelChip').addEventListener('click', () => show('vehicle'));
 
 /* ---------------- sheet: app picker & launcher settings ---------------- */
 const sheet = $('#sheet'), sheetBody = $('#sheetBody');
-function openSheet(title, html) { $('#sheetTitle').textContent = title; sheetBody.innerHTML = html; sheet.classList.add('open'); sheetBody.scrollTop = 0; }
+let sheetOpenedAt = 0;
+function openSheet(title, html) { $('#sheetTitle').textContent = title; sheetBody.innerHTML = html; sheet.classList.add('open'); sheetBody.scrollTop = 0; sheetOpenedAt = Date.now(); }
+// ignore the "click" that follows the tap which opened the sheet (it would pick whatever is under the finger)
+sheet.addEventListener('click', e => { if (Date.now() - sheetOpenedAt < 500) { e.stopPropagation(); e.preventDefault(); } }, true);
 function closeSheet() { sheet.classList.remove('open'); }
 $('#sheetClose').addEventListener('click', closeSheet);
 sheet.addEventListener('click', e => { if (e.target === sheet) closeSheet(); });
@@ -650,7 +662,7 @@ function render() {
   $('#tempTxt').textContent = V.temp_c == null ? '' : num(V.temp_c, 0) + '°C';
 
   // vehicle screen
-  $('#range').textContent = num(V.range_km);
+  $('#range').textContent = (V.range_estimated && V.range_km != null ? '≈ ' : '') + num(V.range_km);
   $('#rangeRow').classList.toggle('low', low);
   $('#fuelFill').style.width = (pct == null ? 0 : Math.max(1.5, Math.min(100, pct))) + '%';
   $('#fuelText').textContent = litres == null ? '-- l' : `${num(litres, 0)} l · ${Math.round(pct)}%`;
@@ -698,6 +710,8 @@ function stopDemo() { clearInterval(demoT); demoT = null; if (!live) { V = {}; }
 /* ---------------- boot ---------------- */
 buildHome();
 refreshDefault();
+setTimeout(() => { try { refreshFix(); } catch (e) {} }, 3000);
+requestAnimationFrame(() => requestAnimationFrame(() => { try { B && B.pageReady && B.pageReady(); } catch (e) {} }));
 // app update found before the screens reloaded
 try { const pu = B && B.pendingUpdate(); if (pu) window.onUpdate({ state: 'app-available', versionName: pu, message: 'Version ' + pu + ' is available' }); } catch (e) {}
 if (B) { try { const d = B.getVehicle(); if (d && d !== 'null') window.onVehicle(JSON.parse(d)); } catch (e) {} }

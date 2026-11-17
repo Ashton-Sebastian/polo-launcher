@@ -33,7 +33,6 @@ public class HomeRedirectService extends AccessibilityService {
     private String lastPkg = "";
 
     private android.content.BroadcastReceiver screenRx;
-    private long lastScreenOff;
 
     @Override
     protected void onServiceConnected() {
@@ -42,18 +41,16 @@ public class HomeRedirectService extends AccessibilityService {
         // Car switched on = head unit wakes up: show the VW logo, then return to what was on screen.
         screenRx = new android.content.BroadcastReceiver() {
             @Override public void onReceive(Context c, Intent i) {
-                long now = System.currentTimeMillis();
-                if (Intent.ACTION_SCREEN_OFF.equals(i.getAction())) { lastScreenOff = now; return; }
-                if (Intent.ACTION_SCREEN_ON.equals(i.getAction()) && lastScreenOff > 0
-                        && now - lastScreenOff > 3000 && SplashActivity.enabled(c)) {
-                    SplashActivity.show(c);
-                }
+                if (Intent.ACTION_SCREEN_OFF.equals(i.getAction())) SplashActivity.onScreenOff(c);
+                else if (Intent.ACTION_SCREEN_ON.equals(i.getAction())) SplashActivity.maybeShow(c);
             }
         };
         android.content.IntentFilter f = new android.content.IntentFilter();
         f.addAction(Intent.ACTION_SCREEN_ON);
         f.addAction(Intent.ACTION_SCREEN_OFF);
         registerReceiver(screenRx, f);
+        // the unit may close apps while the car is off; if we were restarted after the car came on, show the logo now
+        SplashActivity.maybeShow(this);
     }
 
     @Override
@@ -135,6 +132,26 @@ public class HomeRedirectService extends AccessibilityService {
             try { startActivity(i); } catch (Exception ignored) { }
         }
         return true; // consumed: Android will not start the old home screen
+    }
+
+    /** Switch the Home button fix back on if the unit turned it off (only if WRITE_SECURE_SETTINGS was granted). */
+    static void ensureEnabled(Context c) {
+        try {
+            if (c.checkSelfPermission(android.Manifest.permission.WRITE_SECURE_SETTINGS) != PackageManager.PERMISSION_GRANTED) return;
+            String me = c.getPackageName() + "/" + HomeRedirectService.class.getName();
+            android.content.ContentResolver cr = c.getContentResolver();
+            String list = android.provider.Settings.Secure.getString(cr, android.provider.Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES);
+            if (list == null || list.equals("null")) list = "";
+            boolean listed = false;
+            for (String x : list.split(":")) if (x.equalsIgnoreCase(me)) listed = true;
+            if (!listed) {
+                android.provider.Settings.Secure.putString(cr, android.provider.Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES,
+                        list.isEmpty() ? me : list + ":" + me);
+            }
+            if (!listed || android.provider.Settings.Secure.getInt(cr, android.provider.Settings.Secure.ACCESSIBILITY_ENABLED, 0) != 1) {
+                android.provider.Settings.Secure.putInt(cr, android.provider.Settings.Secure.ACCESSIBILITY_ENABLED, 1);
+            }
+        } catch (Exception ignored) { }
     }
 
     static boolean global(String name) {

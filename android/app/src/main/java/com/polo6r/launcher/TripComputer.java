@@ -19,6 +19,7 @@ import org.json.JSONObject;
 class TripComputer {
     private static final String[] M = {"ss", "rf", "lt"};
     private static final double REFUEL_JUMP_L = 4;
+    private static final double ESTIMATE_KML = 13.0; // typical 2011 Polo 6R 1.4 mixed driving (~7.7 l/100 km)
     private static final long NEW_START_AFTER_MS = 2 * 60 * 1000;
 
     private final SharedPreferences p;
@@ -91,7 +92,16 @@ class TripComputer {
                     if (!m.equals("ss") && used >= 3 && Double.isNaN(bestKml)) bestKml = kml; // rf first, then lt
                 }
             }
-            if (!Double.isNaN(fuel) && !Double.isNaN(bestKml)) out.put("range_km", fuel * bestKml);
+            if (!Double.isNaN(fuel)) {
+                if (!Double.isNaN(bestKml)) {
+                    out.put("range_km", fuel * bestKml);
+                    out.put("range_estimated", false);
+                } else {
+                    // not enough driving measured yet: estimate with typical Polo 6R consumption, shown as "≈"
+                    out.put("range_km", fuel * ESTIMATE_KML);
+                    out.put("range_estimated", true);
+                }
+            }
         } catch (Exception ignored) { }
         return out;
     }

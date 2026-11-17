@@ -44,7 +44,11 @@ public class VehicleHub {
         // Live data from the unit's Car Info app (NWD firmware)
         trip = new TripComputer(ctx);
         screenRx = new BroadcastReceiver() {
-            @Override public void onReceive(Context c, Intent i) { trip.onScreen(Intent.ACTION_SCREEN_ON.equals(i.getAction())); }
+            @Override public void onReceive(Context c, Intent i) {
+                boolean on = Intent.ACTION_SCREEN_ON.equals(i.getAction());
+                trip.onScreen(on);
+                if (on) HomeRedirectService.ensureEnabled(c); // turns the fix back on if allowed (it then shows the logo)
+            }
         };
         IntentFilter sf = new IntentFilter(Intent.ACTION_SCREEN_ON);
         sf.addAction(Intent.ACTION_SCREEN_OFF);

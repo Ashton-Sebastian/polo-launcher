@@ -4,6 +4,9 @@
 
     <!-- List every installed app so tiles can be assigned (sideloaded, not a Play Store app) -->
     <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" tools:ignore="QueryAllPackagesPermission" />
+    <!-- Optional: lets the launcher switch its Home button fix back on by itself if the unit turns it off.
+         Only active if granted manually: adb shell pm grant com.polo6r.launcher android.permission.WRITE_SECURE_SETTINGS -->
+    <uses-permission android:name="android.permission.WRITE_SECURE_SETTINGS" tools:ignore="ProtectedPermissions" />
     <!-- Over-the-air updates -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />

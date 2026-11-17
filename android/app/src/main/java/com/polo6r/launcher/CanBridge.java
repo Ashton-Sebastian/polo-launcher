@@ -59,6 +59,10 @@ class CanBridge {
     }
 
     void start() {
+        new Thread(this::startNow, "can-bridge").start(); // loading Car Info's code is slow: keep it off the main thread
+    }
+
+    private void startNow() {
         try {
             Context car = ctx.createPackageContext(PKG, Context.CONTEXT_INCLUDE_CODE | Context.CONTEXT_IGNORE_SECURITY);
             Class<?> c = car.getClassLoader().loadClass("com.nwd.can.sdk.data.CarInfo");

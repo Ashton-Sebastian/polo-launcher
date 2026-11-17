@@ -267,6 +267,10 @@ public class Bridge {
     @JavascriptInterface
     public String getNetworkStatus() { return NetStatus.json(act); }
 
+    /** Called by the page once its screens are drawn (the start-up logo waits for this). */
+    @JavascriptInterface
+    public void pageReady() { MainActivity.webReadyAt = System.currentTimeMillis(); }
+
     @JavascriptInterface
     public boolean getSplashOnStart() { return SplashActivity.enabled(act); }
 

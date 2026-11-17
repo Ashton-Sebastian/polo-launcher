@@ -17,6 +17,9 @@ public class MainActivity extends Activity {
 
     /** True only for the first launcher start in this process (i.e. right after boot) -> show VW splash. */
     static boolean firstStart = true;
+    static volatile MainActivity instance;
+    /** When the web screens last finished drawing (0 = not yet). */
+    static volatile long webReadyAt;
 
     private WebView web;
     Updater updater;
@@ -26,6 +29,9 @@ public class MainActivity extends Activity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        HomeRedirectService.ensureEnabled(this);
+        instance = this;
+        webReadyAt = 0;
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN);
 
         WebView.setWebContentsDebuggingEnabled(true); // lets us inspect it over adb (chrome://inspect)
@@ -41,7 +47,16 @@ public class MainActivity extends Activity {
         s.setAllowFileAccess(true);
         s.setMediaPlaybackRequiresUserGesture(false);
         s.setTextZoom(100); // ignore system font scaling so the layout matches the design
-        web.setWebViewClient(new WebViewClient());
+        web.setWebViewClient(new WebViewClient() {
+            @Override
+            public boolean onRenderProcessGone(WebView view, android.webkit.RenderProcessGoneDetail detail) {
+                // the unit ran low on memory and closed the web view's renderer: rebuild instead of crashing
+                webReadyAt = 0;
+                recreate();
+                return true;
+            }
+        });
+        if (Build.VERSION.SDK_INT >= 26) web.setRendererPriorityPolicy(WebView.RENDERER_PRIORITY_IMPORTANT, false);
 
         hub = new VehicleHub(this, json -> runJs("window.onVehicle && window.onVehicle(" + json + ")"));
         web.addJavascriptInterface(new Bridge(this, hub), "PoloBridge");
@@ -49,10 +64,11 @@ public class MainActivity extends Activity {
         web.loadUrl(Updater.startUrl(this));
         android.widget.FrameLayout root = new android.widget.FrameLayout(this);
         root.addView(web);
-        if (firstStart && SplashActivity.enabled(this)) {
-            // full restart: VW logo straight away, while the screens load underneath
+        if (firstStart && SplashActivity.enabled(this) && System.currentTimeMillis() - SplashActivity.lastShown > 10000) {
+            // launcher (re)started, e.g. the unit closed it while the car was off: VW logo until the screens are drawn
+            SplashActivity.markShown(this);
             final SplashView[] sv = new SplashView[1];
-            sv[0] = new SplashView(this, () -> root.removeView(sv[0]));
+            sv[0] = new SplashView(this, () -> webReadyAt > 0, () -> root.removeView(sv[0]));
             root.addView(sv[0]);
         }
         firstStart = false;
@@ -64,7 +80,7 @@ public class MainActivity extends Activity {
 
     /** Reload the screens (after a screen update was downloaded). */
     void reloadWeb() {
-        if (web != null) { firstStart = false; web.loadUrl(Updater.startUrl(this)); }
+        if (web != null) { firstStart = false; webReadyAt = 0; web.loadUrl(Updater.startUrl(this)); }
     }
 
     void runJs(String js) {
@@ -116,6 +132,7 @@ public class MainActivity extends Activity {
     @Override
     protected void onResume() {
         super.onResume();
+        HomeRedirectService.ensureEnabled(this);
         hideSystemBars();
         runJs("window.onResumeLauncher && window.onResumeLauncher()");
     }
@@ -150,6 +167,7 @@ public class MainActivity extends Activity {
 
     @Override
     protected void onDestroy() {
+        if (instance == this) instance = null;
         if (hub != null) hub.stop();
         if (web != null) web.destroy();
         super.onDestroy();
