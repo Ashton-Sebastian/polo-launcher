@@ -89,7 +89,7 @@ const TILES = [
     { id: 'nav', label: 'Navigation', icon: 'nav', pkgs: ['com.google.android.apps.maps', 'com.waze'], match: /maps|navi|waze/i },
   ],
   [
-    { id: 'settings', label: 'Settings', icon: 'gear', pkgs: ['com.android.car.setting', 'com.android.settings'], intent: 'android.settings.SETTINGS' },
+    { id: 'settings', label: 'Settings', icon: 'gear', pkgs: ['com.android.settings'], intent: 'android.settings.SETTINGS' },
     { id: 'gallery', label: 'Pictures', icon: 'image', pkgs: ['com.alensw.PicFolder', 'com.google.android.apps.photos'], match: /gallery|photo|pic/i },
     { id: 'files', label: 'Files', icon: 'folder', pkgs: ['com.nwd.filemanager'], match: /file/i },
     { id: 'eq', label: 'Sound', icon: 'eq', pkgs: ['com.nwd.audioset'], match: /audio|dsp|equali[sz]er|sound/i },
@@ -99,6 +99,7 @@ const TILES = [
   ],
 ];
 let mapping = store.get('mapping', {}); // tileId -> {pkg,label}
+if (mapping.settings && mapping.settings.pkg !== 'com.android.settings') { delete mapping.settings; store.set('mapping', mapping); }
 if (!store.get('mapFix15', false)) { mapping = {}; store.set('mapping', mapping); store.set('mapFix15', true); }
 
 function tileEl(t) {
@@ -124,7 +125,8 @@ function buildHome() {
   });
   setPage(homePage, false);
 }
-let homePage = 0;
+const HOME_PAGE = 1; // first apps page is the default; car info is page 0 (swipe right)
+let homePage = HOME_PAGE;
 function setPage(i, anim = true) {
   homePage = Math.max(0, Math.min(order.length, i));
   $('#home').classList.toggle('oncar', homePage === 0);
@@ -309,7 +311,8 @@ function show(name) {
   $$('.screen').forEach(s => s.classList.toggle('active', s.id === name));
   if (name === 'vehicle') render();
 }
-window.goHome = () => { if (editing) exitEdit(); closeSheet(); show('home'); setPage(0); };
+window.goHome = () => { if (editing) exitEdit(); closeSheet(); show('home'); setPage(HOME_PAGE); };
+window.showCarInfo = () => { if (editing) exitEdit(); closeSheet(); show('home'); setPage(0); };
 window.onBack = () => { if (editing) return exitEdit(); if ($('#sheet').classList.contains('open')) closeSheet(); else if (screen !== 'home') show('home'); };
 window.onResumeLauncher = () => { tick(); refreshDefault(); try { refreshNet(); refreshFix(); } catch (e) {} };
 
@@ -361,7 +364,8 @@ function buildRail() {
   el.appendChild(h);
 }
 function railAction(id, b) {
-  if (id === '__home' || id === 'vehicle') return window.goHome();
+  if (id === '__home') return window.goHome();
+  if (id === 'vehicle') return window.showCarInfo();
   if (findTile(id)) return openTile(id);
   if (id === 'none') return;
   if (!B) return toast(railInfo(id).label);
@@ -390,7 +394,7 @@ gestures($('#rail'), {
   onTap: el => railAction(el.dataset.id, el),
   onLong: el => { if (el.dataset.slot != null) openRailSheet(+el.dataset.slot); },
 });
-$('#fuelChip').addEventListener('click', () => window.goHome());
+$('#fuelChip').addEventListener('click', () => window.showCarInfo());
 
 /* ---------------- sheet: app picker & launcher settings ---------------- */
 const sheet = $('#sheet'), sheetBody = $('#sheetBody');
