@@ -36,7 +36,7 @@ class CanBridge {
     private static final String FEATURE = "com.nwd.can.sdk.outer.adil.ICanRemote4OuterFeature";
     private static final String CALLBACK = "com.nwd.can.sdk.outer.adil.ICanRemoteModelCallback";
     // ICanRemote4OuterFeature call codes
-    private static final int ADD_CAR_INFO = 17, ADD_CAN_DATA = 23, ADD_CAN_CAR_INFO = 27;
+    private static final int ADD_DOOR = 11, ADD_CAR_INFO = 17, ADD_CAN_DATA = 23, ADD_CAN_CAR_INFO = 27;
     // ICanRemoteModelCallback call codes
     private static final int CB_CAN_DATA = 1, CB_CAR_INFO = 2;
 
@@ -49,6 +49,7 @@ class CanBridge {
     private String status = "not started";
     private long lastData;
     private JSONObject lastRaw = new JSONObject();
+    private JSONObject lastDoors = new JSONObject();
     private final Map<String, String> rawFrames = new LinkedHashMap<String, String>() {
         @Override protected boolean removeEldestEntry(Map.Entry<String, String> e) { return size() > 60; }
     };
@@ -112,7 +113,7 @@ class CanBridge {
         @Override public void onServiceConnected(ComponentName n, IBinder b) {
             remote = b;
             int ok = 0;
-            for (int code : new int[]{ADD_CAR_INFO, ADD_CAN_CAR_INFO, ADD_CAN_DATA}) {
+            for (int code : new int[]{ADD_CAR_INFO, ADD_CAN_CAR_INFO, ADD_CAN_DATA, ADD_DOOR}) {
                 Parcel d = Parcel.obtain(), r = Parcel.obtain();
                 try {
                     d.writeInterfaceToken(FEATURE);
@@ -124,7 +125,7 @@ class CanBridge {
                     Log.w(TAG, "register " + code + " failed", t);
                 } finally { d.recycle(); r.recycle(); }
             }
-            status = "connected to Car Info (" + ok + "/3 feeds), waiting for data – switch the ignition on";
+            status = "connected to Car Info (" + ok + "/4 feeds), waiting for data – switch the ignition on";
             Log.i(TAG, status);
         }
 
@@ -170,6 +171,26 @@ class CanBridge {
         // key by the first 4 bytes (header + frame type) so each kind of frame keeps its latest value
         String key = hex.length() >= 12 ? hex.substring(0, 12).trim() : hex.toString().trim();
         synchronized (rawFrames) { rawFrames.remove(key); rawFrames.put(key, hex.toString().trim()); }
+        // Car Info door message: 6E 03 len DATA ... ; DATA bits 7..2 = front-left, front-right, rear-left,
+        // rear-right, boot, bonnet. Car Info has already applied its left/right swap settings (right-hand drive).
+        if (raw.length >= 4 && (raw[0] & 0xFF) == 0x6E && raw[1] == 3) {
+            int b = raw[3] & 0xFF;
+            try {
+                JSONObject d = new JSONObject()
+                        .put("door_fl", (b >> 7) & 1).put("door_fr", (b >> 6) & 1)
+                        .put("door_rl", (b >> 5) & 1).put("door_rr", (b >> 4) & 1)
+                        .put("door_boot", (b >> 3) & 1).put("door_bonnet", (b >> 2) & 1);
+                lastDoors = d;
+                Log.i(TAG, "doors " + d);
+                sink.onData(withDoors(map(lastRaw)), lastRaw);
+            } catch (Exception ignored) { }
+        }
+    }
+
+    private JSONObject withDoors(JSONObject m) throws Exception {
+        java.util.Iterator<String> it = lastDoors.keys();
+        while (it.hasNext()) { String k = it.next(); m.put(k, lastDoors.get(k)); }
+        return m;
     }
 
     private void onCarInfo(Object ci) throws Exception {
@@ -189,7 +210,7 @@ class CanBridge {
         lastRaw = raw;
         lastData = System.currentTimeMillis();
         Log.i(TAG, "CarInfo " + raw);
-        sink.onData(map(lastRaw), lastRaw);
+        sink.onData(withDoors(map(lastRaw)), lastRaw);
     }
 
     /** CarInfo fields -> the launcher's vehicle data names. Unknown / unsupported values are simply absent. */

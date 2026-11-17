@@ -47,6 +47,7 @@ public class MainActivity extends Activity {
         s.setAllowFileAccess(true);
         s.setMediaPlaybackRequiresUserGesture(false);
         s.setTextZoom(100); // ignore system font scaling so the layout matches the design
+        if (Build.VERSION.SDK_INT >= 23) s.setOffscreenPreRaster(true); // smoother swiping between home pages
         web.setWebViewClient(new WebViewClient() {
             @Override
             public boolean onRenderProcessGone(WebView view, android.webkit.RenderProcessGoneDetail detail) {

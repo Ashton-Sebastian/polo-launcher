@@ -79,7 +79,6 @@ tick(); setInterval(tick, 5000);
 const ZLINK = { pkgs: ['com.zjinnova.zlink', 'com.zjinnova.zlink5', 'com.zjinnova.zlinkcarplay'], match: /z-?link/i };
 const TILES = [
   [
-    { id: 'vehicle', label: 'Vehicle', icon: 'car', internal: 'vehicle' },
     { id: 'usbvideo', label: 'USB Video', icon: 'video', pkgs: ['com.nwd.android.video.ui'], match: /video/i },
     { id: 'phone', label: 'Phone', icon: 'phone', pkgs: ['com.nwd.android.phone'], match: /phone|dialer|bluetooth phone/i },
     { id: 'carplay', label: 'Apple CarPlay', icon: 'carplay', hi: true, pkgs: ZLINK.pkgs, match: ZLINK.match },
@@ -87,9 +86,9 @@ const TILES = [
     { id: 'radio', label: 'Radio', icon: 'radio', pkgs: ['com.nwd.radio'], match: /^radio$|\.radio$/i },
     { id: 'usbmusic', label: 'USB Music', icon: 'usb', pkgs: ['com.nwd.android.music.ui'], match: /music/i },
     { id: 'aauto', label: 'Android Auto', icon: 'aauto', hi: true, pkgs: ZLINK.pkgs, match: ZLINK.match },
+    { id: 'nav', label: 'Navigation', icon: 'nav', pkgs: ['com.google.android.apps.maps', 'com.waze'], match: /maps|navi|waze/i },
   ],
   [
-    { id: 'nav', label: 'Navigation', icon: 'nav', pkgs: ['com.google.android.apps.maps', 'com.waze'], match: /maps|navi|waze/i },
     { id: 'settings', label: 'Settings', icon: 'gear', pkgs: ['com.android.car.setting', 'com.android.settings'], intent: 'android.settings.SETTINGS' },
     { id: 'gallery', label: 'Pictures', icon: 'image', pkgs: ['com.alensw.PicFolder', 'com.google.android.apps.photos'], match: /gallery|photo|pic/i },
     { id: 'files', label: 'Files', icon: 'folder', pkgs: ['com.nwd.filemanager'], match: /file/i },
@@ -111,19 +110,24 @@ function tileEl(t) {
   return el;
 }
 const pagesEl = $('#pages'), dotsEl = $('#dots');
+const carPage = document.getElementById('vehicle');
+carPage.className = 'page carpage';
 function buildHome() {
   pagesEl.innerHTML = ''; dotsEl.innerHTML = '';
+  pagesEl.appendChild(carPage);                 // page 1: car info
+  dotsEl.appendChild(document.createElement('i'));
   order.forEach((ids, i) => {
     const p = document.createElement('div'); p.className = 'page';
     ids.map(findTile).filter(Boolean).forEach(t => p.appendChild(tileEl(t)));
     pagesEl.appendChild(p);
-    const d = document.createElement('i'); if (i === homePage) d.className = 'on'; dotsEl.appendChild(d);
+    dotsEl.appendChild(document.createElement('i'));
   });
   setPage(homePage, false);
 }
 let homePage = 0;
 function setPage(i, anim = true) {
-  homePage = Math.max(0, Math.min(order.length - 1, i));
+  homePage = Math.max(0, Math.min(order.length, i));
+  $('#home').classList.toggle('oncar', homePage === 0);
   pagesEl.style.transition = anim ? '' : 'none';
   pagesEl.style.transform = `translateX(${-homePage * 100}%)`;
   $$('#dots i').forEach((d, j) => d.classList.toggle('on', j === homePage));
@@ -150,7 +154,7 @@ var order = loadOrder();
 
 function openTile(id) {
   const t = findTile(id); if (!t) return;
-  if (t.internal === 'vehicle') return show('vehicle');
+
   if (t.internal === 'allapps') return openAppSheet(null);
   if (t.internal === 'launcher') return openLauncherSettings();
   const m = mapping[id];
@@ -205,7 +209,7 @@ const stageScale = () => stage.getBoundingClientRect().width / 1280;
 gestures($('#pager'), {
   onSwipe: d => setPage(homePage + d),
   onTap: el => openTile(el.dataset.id),
-  onLong: (el, x, y) => enterEdit(el, x, y),
+  onLong: (el, x, y) => { if (el.dataset.id) enterEdit(el, x, y); },
   skip: () => editing,
 });
 
@@ -263,6 +267,7 @@ addEventListener('pointermove', e => {
   const p = toStage(e);
   drag.clone.style.left = (p.x - 120) + 'px'; drag.clone.style.top = (p.y - 70) + 'px';
   // drop position on the current page: nearest tile slot
+  if (homePage === 0) return;                    // car info page: no tiles
   const page = pagesEl.children[homePage];
   const tiles = Array.prototype.slice.call(page.children);
   let best = tiles.length, bestD = 1e9;
@@ -271,18 +276,17 @@ addEventListener('pointermove', e => {
     const d = Math.hypot(e.clientX - cx, e.clientY - cy);
     if (d < bestD) { bestD = d; best = i; }
   });
-  const cur = order[homePage].indexOf(drag.id);
-  if (cur !== best && bestD / s < 140) moveTo(drag.id, homePage, best);
-  else if (cur < 0 && bestD / s < 140) moveTo(drag.id, homePage, best);
+  const cur = order[homePage - 1].indexOf(drag.id);
+  if (cur !== best && bestD / s < 140) moveTo(drag.id, homePage - 1, best);
   // hold at the left / right edge to move to the other page
   const pr = $('#pager').getBoundingClientRect(), edge = 60 * s;
   const dir = e.clientX < pr.left + edge ? -1 : e.clientX > pr.right - edge ? 1 : 0;
-  if (dir && !edgeT && order[homePage + dir]) {
+  if (dir && !edgeT && homePage + dir >= 1 && order[homePage - 1 + dir]) {
     edgeT = setTimeout(() => {
       edgeT = null;
       if (!drag) return;
       setPage(homePage + dir);
-      moveTo(drag.id, homePage, dir > 0 ? 0 : order[homePage].length);
+      moveTo(drag.id, homePage - 1, dir > 0 ? 0 : order[homePage - 1].length);
     }, 700);
   } else if (!dir && edgeT) { clearTimeout(edgeT); edgeT = null; }
 });
@@ -332,6 +336,7 @@ $('#defHide').addEventListener('click', () => { store.set('hideDefBanner', true)
 // Four buttons you pick + the app-grid / Home button at the bottom.
 // Long-press a side-bar button (or use Launcher settings) to change it.
 const RAIL_SPECIAL = {
+  vehicle: { label: 'Car info', icon: 'car' },
   back: { label: 'Back', icon: 'back' }, recents: { label: 'Recent apps', icon: 'recents' },
   volup: { label: 'Volume +', icon: 'plus' }, voldown: { label: 'Volume –', icon: 'minus' }, mute: { label: 'Mute', icon: 'speaker' },
   none: { label: 'Empty', icon: 'none' },
@@ -356,7 +361,7 @@ function buildRail() {
   el.appendChild(h);
 }
 function railAction(id, b) {
-  if (id === '__home') return window.goHome();
+  if (id === '__home' || id === 'vehicle') return window.goHome();
   if (findTile(id)) return openTile(id);
   if (id === 'none') return;
   if (!B) return toast(railInfo(id).label);
@@ -385,7 +390,7 @@ gestures($('#rail'), {
   onTap: el => railAction(el.dataset.id, el),
   onLong: el => { if (el.dataset.slot != null) openRailSheet(+el.dataset.slot); },
 });
-$('#fuelChip').addEventListener('click', () => show('vehicle'));
+$('#fuelChip').addEventListener('click', () => window.goHome());
 
 /* ---------------- sheet: app picker & launcher settings ---------------- */
 const sheet = $('#sheet'), sheetBody = $('#sheetBody');
@@ -681,6 +686,40 @@ function render() {
   $('#sAvg').textContent = num(V[p + '_avg_speed_kmh'], 0);
 
   $('#vehicle').classList.toggle('demo', !live && !!demoT);
+  renderDoors();
+}
+
+/* ---------------- doors ---------------- */
+// Top-down car pointing up: left side on the left. Open doors swing out in amber.
+function doorsSvg(d) {
+  const amber = '#ffb020', dim = 'rgba(255,255,255,.55)';
+  const door = (open, x, y1, y2, side) => {
+    const swing = side < 0 ? -1 : 1, len = y2 - y1;
+    return open
+      ? `<line x1="${x}" y1="${y1}" x2="${x + swing * len * 0.7}" y2="${y1 + len * 0.7}" stroke="${amber}" stroke-width="3.2" stroke-linecap="round"/>`
+      : `<line x1="${x}" y1="${y1}" x2="${x}" y2="${y2}" stroke="${dim}" stroke-width="2.4" stroke-linecap="round"/>`;
+  };
+  return `<svg viewBox="0 0 64 118">
+    <rect x="12" y="6" width="40" height="106" rx="15" fill="rgba(255,255,255,.08)" stroke="${dim}" stroke-width="1.6"/>
+    <path d="M17 34 Q32 28 47 34 L45 44 Q32 40 19 44 Z" fill="rgba(255,255,255,.25)"/>
+    <path d="M19 88 Q32 92 45 88 L47 96 Q32 101 17 96 Z" fill="rgba(255,255,255,.18)"/>
+    <path d="M14 8 Q32 2 50 8" fill="none" stroke="${d.door_bonnet ? amber : 'none'}" stroke-width="3.2" stroke-linecap="round"/>
+    ${d.door_bonnet ? `<rect x="15" y="9" width="34" height="20" rx="8" fill="${amber}" opacity=".45"/>` : ''}
+    ${d.door_boot ? `<rect x="15" y="98" width="34" height="12" rx="6" fill="${amber}" opacity=".7"/>` : ''}
+    ${door(d.door_fl, 12, 46, 66, -1)}${door(d.door_rl, 12, 68, 86, -1)}
+    ${door(d.door_fr, 52, 46, 66, 1)}${door(d.door_rr, 52, 68, 86, 1)}
+  </svg>`;
+}
+function renderDoors() {
+  const keys = ['door_fl', 'door_fr', 'door_rl', 'door_rr', 'door_boot', 'door_bonnet'];
+  const known = keys.some(k => V[k] != null);
+  const d = {}; keys.forEach(k => { d[k] = V[k] === 1; });
+  const open = keys.filter(k => d[k]);
+  $('#doorsView').innerHTML = known ? doorsSvg(d) : '';
+  const names = { door_fl: 'Front left', door_fr: 'Front right', door_rl: 'Rear left', door_rr: 'Rear right', door_boot: 'Boot', door_bonnet: 'Bonnet' };
+  const chip = $('#doorChip');
+  chip.classList.toggle('show', open.length > 0);
+  chip.textContent = open.length === 1 ? names[open[0]] + ' open' : open.length > 1 ? open.length + ' doors open' : '';
 }
 
 /* ---------------- demo simulator (until real CAN data is wired up) ---------------- */
@@ -735,6 +774,6 @@ if (showSplash) {
 
 // allow ?screen=vehicle for previews
 const qs = new URLSearchParams(location.search);
-if (qs.get('screen')) show(qs.get('screen'));
+if (qs.get('screen') === 'apps') setPage(1);
 if (qs.get('nosplash') && document.body.contains(splash)) splash.remove();
 })();
