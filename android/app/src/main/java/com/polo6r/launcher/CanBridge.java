@@ -62,6 +62,12 @@ class CanBridge {
     CanBridge(Context ctx, Sink sink) {
         this.ctx = ctx.getApplicationContext();
         this.sink = sink;
+        // the car only reports a door when it moves: remember the last state so a restart doesn't forget an open door
+        try { lastDoors = new JSONObject(prefs().getString("doors", "{}")); } catch (Exception ignored) { }
+    }
+
+    private android.content.SharedPreferences prefs() {
+        return ctx.getSharedPreferences("polo_can", Context.MODE_PRIVATE);
     }
 
     void start() {
@@ -251,6 +257,7 @@ class CanBridge {
                         .put("door_rl", (b >> 5) & 1).put("door_rr", (b >> 4) & 1)
                         .put("door_boot", (b >> 3) & 1).put("door_bonnet", (b >> 2) & 1);
                 lastDoors = d;
+                prefs().edit().putString("doors", d.toString()).apply();
                 Log.i(TAG, "doors " + d);
                 sink.onData(withDoors(map(lastRaw)), lastRaw);
             } catch (Exception ignored) { }
