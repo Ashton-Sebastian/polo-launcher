@@ -238,7 +238,12 @@ pre.diag.tall{max-height:none}
 .doors{position:absolute;left:300px;top:-6px;width:64px;height:118px}
 .doors svg{width:100%;height:100%;overflow:visible}
 
-.dooricon{display:none;position:absolute;left:393px;top:16px;width:30px;height:54px;z-index:5} /* centred in the left half of the top bar */
+/* warning icons in the left half of the top bar: door icon, then the parking brake light */
+.warnicons{position:absolute;left:393px;top:16px;height:54px;display:flex;align-items:center;z-index:5}
+.dooricon{display:none;width:30px;height:54px}
+.brakeicon{display:none;width:46px;height:38px;margin-left:14px}
+.brakeicon.show{display:inline-flex}
+.brakeicon svg{width:100%;height:100%;overflow:visible}
 .dooricon.show{display:inline-flex}
 .dooricon svg{width:100%;height:100%;overflow:visible}
 

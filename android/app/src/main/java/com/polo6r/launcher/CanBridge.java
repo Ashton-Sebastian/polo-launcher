@@ -263,6 +263,12 @@ class CanBridge {
         return m;
     }
 
+    /** mHandbrake value that means the parking brake is applied (lever up/down test on the car, 18 Nov 2026). */
+    private static final int HANDBRAKE_ON = 1;
+
+    private static final java.util.Set<String> KEEP_ZERO = new java.util.HashSet<>(java.util.Arrays.asList(
+            "mHandbrake", "mHandbrakeFailure", "mParkingIndicator", "mBrakeWarning", "mSafetyBelt", "mFrontRightSafetyBelt"));
+
     private void onCarInfo(Object ci) throws Exception {
         JSONObject raw = new JSONObject();
         for (Class<?> c = ci.getClass(); c != null && c != Object.class; c = c.getSuperclass()) {
@@ -271,7 +277,8 @@ class CanBridge {
                 f.setAccessible(true);
                 Object v = f.get(ci);
                 if (v == null) continue;
-                if (v instanceof Number && (((Number) v).doubleValue() == 0 || ((Number) v).doubleValue() == -1)) continue; // -1 = not provided by this car
+                boolean keepZero = KEEP_ZERO.contains(f.getName());              // on/off states: 0 means off, not "missing"
+                if (v instanceof Number && ((((Number) v).doubleValue() == 0 && !keepZero) || ((Number) v).doubleValue() == -1)) continue; // -1 = not provided by this car
                 if (v instanceof String && ((String) v).isEmpty()) continue;
                 if (v instanceof Number || v instanceof String || v instanceof Boolean) raw.put(f.getName(), v);
             }
@@ -289,12 +296,14 @@ class CanBridge {
         Double t = parseNum(r.optString("mstrOuttemp", null));
         if (t != null) m.put("temp_c", t);
         putIf(m, "speed_kmh", r, "mInstantanSpeed");
-        putIf(m, "rpm", r, "mEngineSpeed");
+        // engine off: the car leaves rpm out instead of sending 0, so say 0 (otherwise the last rpm stays on screen)
+        m.put("rpm", r.has("mEngineSpeed") ? r.getDouble("mEngineSpeed") : 0);
         putIf(m, "odometer_km", r, "mDrivingMile");      // Polo 6R: odometer (km)
         putIf(m, "fuel_litres", r, "mOilSurplus");       // Polo 6R: fuel remaining (litres)
         putIf(m, "range_km", r, "mCanDriverMileage");    // range, if the adapter ever sends it
         putIf(m, "coolant_c", r, "mWaterTemp");
         putIf(m, "battery_v", r, "mBatteryVoltage");
+        if (r.has("mHandbrake")) m.put("handbrake", r.getInt("mHandbrake") == HANDBRAKE_ON ? 1 : 0);
         // trip computer memories 1/2/3 = since start / since refuelling / long-term
         String[] p = {"ss", "rf", "lt"};
         for (int i = 0; i < 3; i++) {

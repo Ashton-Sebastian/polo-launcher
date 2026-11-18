@@ -806,7 +806,7 @@ function render() {
   $('#fuelBox').classList.toggle('low', low);
   const cl = [];
   if (V.odometer_km != null) cl.push(num(V.odometer_km) + ' km');
-  if (V.rpm != null) cl.push(num(V.rpm) + ' rpm');
+  if (V.rpm > 0) cl.push(num(V.rpm) + ' rpm'); // hidden while the engine is off
   if (V.battery_v != null) cl.push(num(V.battery_v, 1) + ' V');
   $('#carLine').textContent = cl.join('  ·  ');
 
@@ -821,6 +821,7 @@ function render() {
 
   $('#vehicle').classList.toggle('demo', !live && !!demoT);
   renderDoors();
+  renderBrake();
 }
 
 /* ---------------- doors ---------------- */
@@ -844,6 +845,18 @@ function doorsSvg(d) {
     ${door(d.door_fr, 52, 46, 66, 1)}${door(d.door_rr, 52, 68, 86, 1)}
   </svg>`;
 }
+// VW parking brake light: red "(P)" — a circle with a P, between two arcs
+const BRAKE_SVG = '<svg viewBox="0 0 46 38" fill="none" stroke="#ff4433" stroke-width="2.6" stroke-linecap="round">' +
+  '<circle cx="23" cy="19" r="12"/>' +
+  '<path d="M8 6 A18 18 0 0 0 8 32"/><path d="M38 6 A18 18 0 0 1 38 32"/>' +
+  '<path d="M19.5 26 V12 h5 a4.2 4.2 0 0 1 0 8.4 h-5" stroke-linejoin="round"/></svg>';
+function renderBrake() {
+  const on = V.handbrake === 1;
+  const el = $('#brakeIcon');
+  el.classList.toggle('show', on);
+  el.innerHTML = on ? BRAKE_SVG : '';
+}
+
 function renderDoors() {
   // car icon at the top right, only while a door, the boot or the bonnet is open
   const keys = ['door_fl', 'door_fr', 'door_rl', 'door_rr', 'door_boot', 'door_bonnet'];
