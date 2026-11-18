@@ -270,8 +270,11 @@ class CanBridge {
         return m;
     }
 
-    /** mHandbrake value that means the parking brake is applied (lever up/down test on the car, 18 Nov 2026). */
-    private static final int HANDBRAKE_ON = 1;
+    /**
+     * mHandbrake value that means the parking brake is applied. On this Polo it is 0 (1 = released), checked with the
+     * lever on the car on 18 Nov 2026 (Car Info's decoder for this CAN box flips the bit).
+     */
+    private static final int HANDBRAKE_ON = 0;
 
     private static final java.util.Set<String> KEEP_ZERO = new java.util.HashSet<>(java.util.Arrays.asList(
             "mHandbrake", "mHandbrakeFailure", "mParkingIndicator", "mBrakeWarning", "mSafetyBelt", "mFrontRightSafetyBelt"));
