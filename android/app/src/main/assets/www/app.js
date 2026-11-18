@@ -796,7 +796,8 @@ function render() {
   $('#fuelMini').style.width = (pct == null ? 0 : Math.max(2, Math.min(100, pct))) + '%';
   $('#fuelPct').textContent = litres == null ? '--L' : Math.round(litres) + 'L';
   $('#fuelChip').classList.toggle('low', low);
-  $('#tempTxt').textContent = V.temp_c == null ? '' : num(V.temp_c, 0) + '°C';
+  // same as the car: it reports in half degrees (29.5°C), so keep the .5
+  $('#tempTxt').textContent = V.temp_c == null ? '' : num(V.temp_c, V.temp_c % 1 ? 1 : 0) + '°C';
 
   // vehicle screen
   $('#range').textContent = num(V.range_km);
