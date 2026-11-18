@@ -86,7 +86,8 @@ const TILES = [
     { id: 'radio', label: 'Radio', icon: 'radio', internal: 'radio' },
     { id: 'usbmusic', label: 'USB Music', icon: 'usb', pkgs: ['com.nwd.android.music.ui'], match: /music/i },
     { id: 'aauto', label: 'Android Auto', icon: 'aauto', hi: true, pkgs: ZLINK.pkgs, match: ZLINK.match },
-    { id: 'nav', label: 'Navigation', icon: 'nav', pkgs: ['com.google.android.apps.maps', 'com.waze'], match: /maps|navi|waze/i },
+    // no maps app installed (Google Maps is off with Play Services): navigation is in CarPlay
+    { id: 'nav', label: 'Navigation', icon: 'nav', pkgs: ['com.google.android.apps.maps', 'com.waze'].concat(ZLINK.pkgs), match: /maps|navi|waze/i },
   ],
   [
     { id: 'settings', label: 'Settings', icon: 'gear', pkgs: ['com.android.settings'], intent: 'android.settings.SETTINGS' },

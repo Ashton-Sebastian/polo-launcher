@@ -40,6 +40,7 @@ public class VehicleHub {
     private static final String ACT_QUERY_VOLT = "com.nwd.action.ACTION_QUERY_CAN_BATTERY_VOLTAGE";
     private static final String ACT_VOLT = "com.nwd.action.ACTION_CAN_BATTERY_VOLTAGE";
     private volatile double liveVolt = Double.NaN;
+    private volatile long lastCanVoltAt;
     private int voltLogs = 0, tickCount = 0;
     private BroadcastReceiver voltRx;
     private android.content.BroadcastReceiver screenRx;
@@ -79,6 +80,7 @@ public class VehicleHub {
         }, 1000);
         can = new CanBridge(ctx, (mapped, raw) -> {
             lastMapped = mapped;
+            if (mapped.has("battery_v")) lastCanVoltAt = System.currentTimeMillis();
             push(mapped);
         });
         can.start();
@@ -115,7 +117,9 @@ public class VehicleHub {
                     while (it.hasNext()) { String k = it.next(); out.put(k, computed.get(k)); }
                     it = mapped.keys();
                     while (it.hasNext()) { String k = it.next(); out.put(k, mapped.get(k)); }
-                    if (!Double.isNaN(liveVolt)) out.put("battery_v", liveVolt); // live reading wins
+                    // the car's own battery reading (CAN) while it is arriving; otherwise the head unit's supply reading
+                    boolean canFresh = System.currentTimeMillis() - lastCanVoltAt < 5000;
+                    if (!canFresh && !Double.isNaN(liveVolt)) out.put("battery_v", liveVolt);
                     it = out.keys();
                     while (it.hasNext()) { String k = it.next(); state.put(k, out.get(k)); }
                 } catch (Exception ignored) { }

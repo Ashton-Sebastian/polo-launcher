@@ -37,12 +37,9 @@ class CanBridge {
     private static final String CALLBACK = "com.nwd.can.sdk.outer.adil.ICanRemoteModelCallback";
     // ICanRemote4OuterFeature call codes
     private static final int ADD_DOOR = 11, ADD_CAR_INFO = 17, ADD_CAN_DATA = 23, ADD_CAN_CAR_INFO = 27;
-    private static final int WRITE_TO_CAN_BOX = 5, NULL_FRAME = 6, DATA_OFFSET = 7;
     /*
      * The CAN box only streams rpm, speed, doors etc. while it is asked for them. Car Info asks every 2 s while its
-     * own screen is open (and stops when you leave it). Every VW CAN box brand Car Info supports is asked the same
-     * way: command 0x90 "request" with data 0x41 (car info) + part 1/2/3. Car Info's service builds the frame in the
-     * right format for the fitted box (call 6), and adds the checksum and sends it (call 5), so we do the same.
+     * own screen is open (and stops when you leave it): command 0x90 "request" with data 0x41 (car info) + part 1/2/3.
      */
     private static final byte CMD_REQUEST = (byte) 0x90, DATA_CAR_INFO = 0x41;
     // ICanRemoteModelCallback call codes
@@ -95,36 +92,48 @@ class CanBridge {
         if (!bound) main.postDelayed(this::bind, 30000);
     }
 
-    private byte[] reqFrame;
-    private int reqOffset = -1;
     private final android.os.HandlerThread reqThread = new android.os.HandlerThread("can-req");
     private Handler req;
+
+    /*
+     * Car Info's outside interface has no CAN box connection set up (its frame builder returns nothing), so we write
+     * the request to the CAN box's serial port ourselves: exactly the bytes Car Info sends every 2 s while its Status
+     * page is open (seen on this unit, 18 Nov 2026): 2E 90 02 41 0N CS for N = 1..3, CS = FF - (90+02+41+N).
+     * The port (/dev/ttyS4) is open to all apps on this unit and Car Info has already set its speed; Car Info keeps
+     * reading the CAN box's answers and passes the car data on to us as usual.
+     */
+    private static final String CAN_PORT = "/dev/ttyS4";
+    private java.io.FileDescriptor port;
+    private int reqLogs = 0;
+
+    private static byte[] requestFrame(int part) {
+        int sum = (0x90 + 0x02 + DATA_CAR_INFO + part) & 0xFF;
+        return new byte[]{0x2E, CMD_REQUEST, 0x02, DATA_CAR_INFO, (byte) part, (byte) (0xFF - sum)};
+    }
 
     /** Ask the CAN box for fresh car data (call about once a second while the car is on). */
     void requestCarData() {
         if (req == null) { reqThread.start(); req = new Handler(reqThread.getLooper()); }
         req.post(() -> {
             IBinder b = remote;
-            if (b == null) return;
-            if (!b.isBinderAlive()) { reconnect("Car Info service died"); return; }
+            if (b != null && !b.isBinderAlive()) { reconnect("Car Info service died"); return; }
             try {
-                if (reqFrame == null || reqOffset < 0) {
-                    reqFrame = callBytes(b, NULL_FRAME, (byte) 2, CMD_REQUEST);
-                    reqOffset = callInt(b, DATA_OFFSET);
-                    Log.i(TAG, "request frame " + hex(reqFrame) + " data at " + reqOffset);
-                }
-                if (reqFrame == null || reqOffset < 0 || reqOffset + 1 >= reqFrame.length) return;
+                if (port == null) port = android.system.Os.open(CAN_PORT,
+                        android.system.OsConstants.O_WRONLY | android.system.OsConstants.O_NOCTTY | android.system.OsConstants.O_NONBLOCK, 0);
                 for (int part = 1; part <= 3; part++) {
-                    byte[] f = reqFrame.clone();
-                    f[reqOffset] = DATA_CAR_INFO;
-                    f[reqOffset + 1] = (byte) part;
-                    callWrite(b, f);
+                    byte[] f = requestFrame(part);
+                    android.system.Os.write(port, f, 0, f.length);
                 }
+                if (reqLogs++ < 3) Log.i(TAG, "asked the CAN box for car data (" + hex(requestFrame(1)) + " ...)");
             } catch (Throwable t) {
-                Log.w(TAG, "request failed", t);
-                reqFrame = null;
+                if (reqLogs++ < 10) Log.w(TAG, "CAN request failed", t);
+                closePort();
             }
         });
+    }
+
+    private void closePort() {
+        if (port != null) { try { android.system.Os.close(port); } catch (Exception ignored) { } port = null; }
     }
 
     /** The car was switched on: make sure we are still connected to Car Info (it can be restarted while the car is off). */
@@ -135,32 +144,11 @@ class CanBridge {
 
     private void reconnect(String why) {
         Log.i(TAG, why);
-        main.post(() -> { stop(); remote = null; reqFrame = null; reqOffset = -1; bind(); });
+        main.post(() -> { stop(); remote = null; bind(); });
     }
 
-    private static byte[] callBytes(IBinder b, int code, byte a, byte c) throws Exception {
-        Parcel d = Parcel.obtain(), r = Parcel.obtain();
-        try {
-            d.writeInterfaceToken(FEATURE); d.writeByte(a); d.writeByte(c);
-            b.transact(code, d, r, 0); r.readException(); return r.createByteArray();
-        } finally { d.recycle(); r.recycle(); }
-    }
 
-    private static int callInt(IBinder b, int code) throws Exception {
-        Parcel d = Parcel.obtain(), r = Parcel.obtain();
-        try {
-            d.writeInterfaceToken(FEATURE);
-            b.transact(code, d, r, 0); r.readException(); return r.readInt();
-        } finally { d.recycle(); r.recycle(); }
-    }
 
-    private static void callWrite(IBinder b, byte[] frame) throws Exception {
-        Parcel d = Parcel.obtain(), r = Parcel.obtain();
-        try {
-            d.writeInterfaceToken(FEATURE); d.writeByteArray(frame);
-            b.transact(WRITE_TO_CAN_BOX, d, r, 0); r.readException();
-        } finally { d.recycle(); r.recycle(); }
-    }
 
     private static String hex(byte[] a) {
         if (a == null) return "null";
@@ -194,7 +182,6 @@ class CanBridge {
     private final ServiceConnection conn = new ServiceConnection() {
         @Override public void onServiceConnected(ComponentName n, IBinder b) {
             remote = b;
-            reqFrame = null; reqOffset = -1;
             int ok = 0;
             for (int code : new int[]{ADD_CAR_INFO, ADD_CAN_CAR_INFO, ADD_CAN_DATA, ADD_DOOR}) {
                 Parcel d = Parcel.obtain(), r = Parcel.obtain();
