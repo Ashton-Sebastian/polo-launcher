@@ -805,7 +805,6 @@ function render() {
   $('#fuelBox').classList.toggle('low', low);
   const cl = [];
   if (V.odometer_km != null) cl.push(num(V.odometer_km) + ' km');
-  if (V.speed_kmh != null) cl.push(num(V.speed_kmh) + ' km/h');
   if (V.rpm != null) cl.push(num(V.rpm) + ' rpm');
   if (V.battery_v != null) cl.push(num(V.battery_v, 1) + ' V');
   $('#carLine').textContent = cl.join('  ·  ');

@@ -108,8 +108,8 @@ class TripComputer {
             double bestKml = Double.NaN;
             for (String m : M) {
                 double odoDist = Math.max(0, odo - p.getFloat(m + "_odo", (float) odo));
-                // smooth live distance from speed, kept within the odometer's whole-km reading
-                double dist = Math.min(Math.max(p.getFloat(m + "_int", 0), odoDist), odoDist + 0.999);
+                // the car's speed reading is unreliable, so distance comes from the odometer alone
+                double dist = odoDist;
                 double min = p.getFloat(m + "_min", 0);
                 double used = p.getFloat(m + "_used", 0);
                 out.put(m + "_distance_km", dist);

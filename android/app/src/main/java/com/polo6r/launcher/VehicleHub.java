@@ -57,23 +57,26 @@ public class VehicleHub {
                 boolean on = Intent.ACTION_SCREEN_ON.equals(i.getAction());
                 screenOn = on;
                 trip.onScreen(on);
+                if (on && can != null) { can.onCarOn(); can.requestCarData(); }
                 if (on) HomeRedirectService.ensureEnabled(c); // turns the fix back on if allowed (it then shows the logo)
             }
         };
         IntentFilter sf = new IntentFilter(Intent.ACTION_SCREEN_ON);
         sf.addAction(Intent.ACTION_SCREEN_OFF);
         ctx.registerReceiver(screenRx, sf);
-        // the car only sends data when something changes: update the trip computer every 2 s while the car is on (live)
+        // every second while the car is on: ask the CAN box for fresh car data (rpm, doors, fuel...) and the unit for
+        // the battery voltage; every 2 s update the trip computer even if nothing changed (time keeps running)
         ticker.postDelayed(new Runnable() {
             @Override public void run() {
-                JSONObject m = lastMapped;
-                if (screenOn && (tickCount++ % 2 == 0)) {
+                if (screenOn) {
+                    if (can != null) can.requestCarData();
                     try { ctx.sendBroadcast(new Intent(ACT_QUERY_VOLT)); } catch (Exception ignored) { }
+                    JSONObject m = lastMapped;
+                    if (m != null && (tickCount++ % 2 == 0)) push(m);
                 }
-                if (screenOn && m != null) push(m);
-                ticker.postDelayed(this, 2000);
+                ticker.postDelayed(this, 1000);
             }
-        }, 2000);
+        }, 1000);
         can = new CanBridge(ctx, (mapped, raw) -> {
             lastMapped = mapped;
             push(mapped);

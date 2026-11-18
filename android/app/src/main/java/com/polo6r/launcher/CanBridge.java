@@ -37,6 +37,14 @@ class CanBridge {
     private static final String CALLBACK = "com.nwd.can.sdk.outer.adil.ICanRemoteModelCallback";
     // ICanRemote4OuterFeature call codes
     private static final int ADD_DOOR = 11, ADD_CAR_INFO = 17, ADD_CAN_DATA = 23, ADD_CAN_CAR_INFO = 27;
+    private static final int WRITE_TO_CAN_BOX = 5, NULL_FRAME = 6, DATA_OFFSET = 7;
+    /*
+     * The CAN box only streams rpm, speed, doors etc. while it is asked for them. Car Info asks every 2 s while its
+     * own screen is open (and stops when you leave it). Every VW CAN box brand Car Info supports is asked the same
+     * way: command 0x90 "request" with data 0x41 (car info) + part 1/2/3. Car Info's service builds the frame in the
+     * right format for the fitted box (call 6), and adds the checksum and sends it (call 5), so we do the same.
+     */
+    private static final byte CMD_REQUEST = (byte) 0x90, DATA_CAR_INFO = 0x41;
     // ICanRemoteModelCallback call codes
     private static final int CB_CAN_DATA = 1, CB_CAR_INFO = 2;
 
@@ -87,6 +95,80 @@ class CanBridge {
         if (!bound) main.postDelayed(this::bind, 30000);
     }
 
+    private byte[] reqFrame;
+    private int reqOffset = -1;
+    private final android.os.HandlerThread reqThread = new android.os.HandlerThread("can-req");
+    private Handler req;
+
+    /** Ask the CAN box for fresh car data (call about once a second while the car is on). */
+    void requestCarData() {
+        if (req == null) { reqThread.start(); req = new Handler(reqThread.getLooper()); }
+        req.post(() -> {
+            IBinder b = remote;
+            if (b == null) return;
+            if (!b.isBinderAlive()) { reconnect("Car Info service died"); return; }
+            try {
+                if (reqFrame == null || reqOffset < 0) {
+                    reqFrame = callBytes(b, NULL_FRAME, (byte) 2, CMD_REQUEST);
+                    reqOffset = callInt(b, DATA_OFFSET);
+                    Log.i(TAG, "request frame " + hex(reqFrame) + " data at " + reqOffset);
+                }
+                if (reqFrame == null || reqOffset < 0 || reqOffset + 1 >= reqFrame.length) return;
+                for (int part = 1; part <= 3; part++) {
+                    byte[] f = reqFrame.clone();
+                    f[reqOffset] = DATA_CAR_INFO;
+                    f[reqOffset + 1] = (byte) part;
+                    callWrite(b, f);
+                }
+            } catch (Throwable t) {
+                Log.w(TAG, "request failed", t);
+                reqFrame = null;
+            }
+        });
+    }
+
+    /** The car was switched on: make sure we are still connected to Car Info (it can be restarted while the car is off). */
+    void onCarOn() {
+        IBinder b = remote;
+        if (b == null || !b.isBinderAlive()) reconnect("reconnecting after the car was switched on");
+    }
+
+    private void reconnect(String why) {
+        Log.i(TAG, why);
+        main.post(() -> { stop(); remote = null; reqFrame = null; reqOffset = -1; bind(); });
+    }
+
+    private static byte[] callBytes(IBinder b, int code, byte a, byte c) throws Exception {
+        Parcel d = Parcel.obtain(), r = Parcel.obtain();
+        try {
+            d.writeInterfaceToken(FEATURE); d.writeByte(a); d.writeByte(c);
+            b.transact(code, d, r, 0); r.readException(); return r.createByteArray();
+        } finally { d.recycle(); r.recycle(); }
+    }
+
+    private static int callInt(IBinder b, int code) throws Exception {
+        Parcel d = Parcel.obtain(), r = Parcel.obtain();
+        try {
+            d.writeInterfaceToken(FEATURE);
+            b.transact(code, d, r, 0); r.readException(); return r.readInt();
+        } finally { d.recycle(); r.recycle(); }
+    }
+
+    private static void callWrite(IBinder b, byte[] frame) throws Exception {
+        Parcel d = Parcel.obtain(), r = Parcel.obtain();
+        try {
+            d.writeInterfaceToken(FEATURE); d.writeByteArray(frame);
+            b.transact(WRITE_TO_CAN_BOX, d, r, 0); r.readException();
+        } finally { d.recycle(); r.recycle(); }
+    }
+
+    private static String hex(byte[] a) {
+        if (a == null) return "null";
+        StringBuilder h = new StringBuilder();
+        for (byte x : a) h.append(String.format("%02X ", x));
+        return h.toString().trim();
+    }
+
     void stop() {
         if (bound) { try { ctx.unbindService(conn); } catch (Exception ignored) { } bound = false; }
     }
@@ -112,6 +194,7 @@ class CanBridge {
     private final ServiceConnection conn = new ServiceConnection() {
         @Override public void onServiceConnected(ComponentName n, IBinder b) {
             remote = b;
+            reqFrame = null; reqOffset = -1;
             int ok = 0;
             for (int code : new int[]{ADD_CAR_INFO, ADD_CAN_CAR_INFO, ADD_CAN_DATA, ADD_DOOR}) {
                 Parcel d = Parcel.obtain(), r = Parcel.obtain();
