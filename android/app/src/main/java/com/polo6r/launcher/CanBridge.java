@@ -38,10 +38,8 @@ class CanBridge {
     // ICanRemote4OuterFeature call codes
     private static final int ADD_DOOR = 11, ADD_CAR_INFO = 17, ADD_CAN_DATA = 23, ADD_CAN_CAR_INFO = 27;
     /*
-     * The CAN box only streams rpm, speed, doors etc. while it is asked for them. Car Info asks every 2 s while its
-     * own screen is open (and stops when you leave it): command 0x90 "request" with data 0x41 (car info) + part 1/2/3.
+     * The CAN box only streams rpm etc. while Car Info's Status page asks for them (every 2 s while it is open).
      */
-    private static final byte CMD_REQUEST = (byte) 0x90, DATA_CAR_INFO = 0x41;
     // ICanRemoteModelCallback call codes
     private static final int CB_CAN_DATA = 1, CB_CAR_INFO = 2;
 
@@ -98,49 +96,13 @@ class CanBridge {
         if (!bound) main.postDelayed(this::bind, 30000);
     }
 
-    private final android.os.HandlerThread reqThread = new android.os.HandlerThread("can-req");
-    private Handler req;
 
     /*
-     * Car Info's outside interface has no CAN box connection set up (its frame builder returns nothing), so we write
-     * the request to the CAN box's serial port ourselves: exactly the bytes Car Info sends every 2 s while its Status
-     * page is open (seen on this unit, 18 Nov 2026): 2E 90 02 41 0N CS for N = 1..3, CS = FF - (90+02+41+N).
-     * The port (/dev/ttyS4) is open to all apps on this unit and Car Info has already set its speed; Car Info keeps
-     * reading the CAN box's answers and passes the car data on to us as usual.
+     * Polo Launcher must never write to the CAN box itself. Versions 2.9-3.4 sent their own data requests on the CAN
+     * box's serial port (/dev/ttyS4). The CAN box answers every message with an FF acknowledgement, so extra traffic
+     * from a second app knocks Car Info's message handling out of step: that caused the "Can device is abnormal"
+     * warnings and lost steering-wheel buttons (Nov 2026). We only listen to what Car Info passes on.
      */
-    private static final String CAN_PORT = "/dev/ttyS4";
-    private java.io.FileDescriptor port;
-    private int reqLogs = 0;
-
-    private static byte[] requestFrame(int part) {
-        int sum = (0x90 + 0x02 + DATA_CAR_INFO + part) & 0xFF;
-        return new byte[]{0x2E, CMD_REQUEST, 0x02, DATA_CAR_INFO, (byte) part, (byte) (0xFF - sum)};
-    }
-
-    /** Ask the CAN box for fresh car data (call about once a second while the car is on). */
-    void requestCarData() {
-        if (req == null) { reqThread.start(); req = new Handler(reqThread.getLooper()); }
-        req.post(() -> {
-            IBinder b = remote;
-            if (b != null && !b.isBinderAlive()) { reconnect("Car Info service died"); return; }
-            try {
-                if (port == null) port = android.system.Os.open(CAN_PORT,
-                        android.system.OsConstants.O_WRONLY | android.system.OsConstants.O_NOCTTY | android.system.OsConstants.O_NONBLOCK, 0);
-                for (int part = 1; part <= 3; part++) {
-                    byte[] f = requestFrame(part);
-                    android.system.Os.write(port, f, 0, f.length);
-                }
-                if (reqLogs++ < 3) Log.i(TAG, "asked the CAN box for car data (" + hex(requestFrame(1)) + " ...)");
-            } catch (Throwable t) {
-                if (reqLogs++ < 10) Log.w(TAG, "CAN request failed", t);
-                closePort();
-            }
-        });
-    }
-
-    private void closePort() {
-        if (port != null) { try { android.system.Os.close(port); } catch (Exception ignored) { } port = null; }
-    }
 
     /** The car was switched on: make sure we are still connected to Car Info (it can be restarted while the car is off). */
     void onCarOn() {

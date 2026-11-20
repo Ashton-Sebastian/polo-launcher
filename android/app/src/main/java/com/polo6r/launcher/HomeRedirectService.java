@@ -218,6 +218,7 @@ public class HomeRedirectService extends AccessibilityService {
             case "back": return s.performGlobalAction(GLOBAL_ACTION_BACK);
             case "recents": return s.performGlobalAction(GLOBAL_ACTION_RECENTS);
             case "notifications": return s.performGlobalAction(GLOBAL_ACTION_NOTIFICATIONS);
+            case "power": return s.performGlobalAction(GLOBAL_ACTION_POWER_DIALOG); // Restart / Power off menu
             default: return false;
         }
     }

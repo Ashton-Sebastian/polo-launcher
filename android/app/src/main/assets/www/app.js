@@ -26,6 +26,7 @@ const ICON = {
   eq: S('<path d="M6 4v16M12 4v16M18 4v16"/><rect x="4" y="13" width="4" height="3" rx="1" fill="currentColor"/><rect x="10" y="7" width="4" height="3" rx="1" fill="currentColor"/><rect x="16" y="11" width="4" height="3" rx="1" fill="currentColor"/>'),
   globe: S('<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3.5 3 14.5 0 18M12 3c-3 3.5-3 14.5 0 18"/>'),
   apps: S('<circle cx="6" cy="6" r="1.3"/><circle cx="12" cy="6" r="1.3"/><circle cx="18" cy="6" r="1.3"/><circle cx="6" cy="12" r="1.3"/><circle cx="12" cy="12" r="1.3"/><circle cx="18" cy="12" r="1.3"/><circle cx="6" cy="18" r="1.3"/><circle cx="12" cy="18" r="1.3"/><circle cx="18" cy="18" r="1.3"/>', ''),
+  power: S('<path d="M12 3.5v8"/><path d="M6.6 6.9a7.6 7.6 0 1 0 10.8 0"/>'),
   sliders: S('<path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/>'),
   plus: S('<circle cx="12" cy="12" r="9"/><path d="M12 8v8M8 12h8"/>'),
   minus: S('<circle cx="12" cy="12" r="9"/><path d="M8 12h8"/>'),
@@ -97,6 +98,7 @@ const TILES = [
     { id: 'browser', label: 'Browser', icon: 'globe', pkgs: ['com.android.chrome', 'org.mozilla.firefox'], match: /browser|chrome/i },
     { id: 'allapps', label: 'All apps', icon: 'apps', internal: 'allapps' },
     { id: 'launcher', label: 'Launcher', icon: 'sliders', internal: 'launcher' },
+    { id: 'restart', label: 'Restart', icon: 'power', internal: 'restart' },
   ],
 ];
 let mapping = store.get('mapping', {}); // tileId -> {pkg,label}
@@ -161,6 +163,11 @@ function openTile(id) {
   if (t.internal === 'radio') return openRadio();
   if (t.internal === 'allapps') return openAppSheet(null);
   if (t.internal === 'launcher') return openLauncherSettings();
+  if (t.internal === 'restart') {
+    // the unit's power menu (Restart / Power off); needs the Home button fix, which runs the accessibility service
+    if (B && B.globalAction('power')) return;
+    return toast(B ? 'Restart needs the Home button fix – switch it on in Launcher settings' : 'Would open the power menu');
+  }
   const m = mapping[id];
   if (m && m.pkg) return launchPkg(m.pkg, t.label);
   if (t.pkgs || t.match) {
@@ -811,14 +818,14 @@ function render() {
   if (V.battery_v != null) cl.push(num(V.battery_v, 1) + ' V');
   $('#carLine').textContent = cl.join('  ·  ');
 
-  // Since Start: distance this trip; time, consumption, avg. speed for today.
-  // Since Refuelling: distance and time since the tank was filled; consumption and avg. speed as Since Start.
+  // Since Start: distance this trip; time, consumption, avg. speed for the whole day (reset at the first start of a day).
+  // Since Refuelling: everything since the tank was last filled.
   const p = ['ss', 'rf'][tab];
   const dk = V[p + '_distance_km'];
   $('#sDist').textContent = dk != null && dk < 100 ? num(dk, 1) : num(dk, 0);
   $('#sTime').textContent = hm(V[p + '_time_min']);
-  const c = consumption('ss'); $('#sCons').textContent = c.v; $('#sConsU').textContent = c.u;
-  $('#sAvg').textContent = num(V.ss_avg_speed_kmh, 0);
+  const c = consumption(p); $('#sCons').textContent = c.v; $('#sConsU').textContent = c.u;
+  $('#sAvg').textContent = num(V[p + '_avg_speed_kmh'], 0);
 
   $('#vehicle').classList.toggle('demo', !live && !!demoT);
   renderDoors();
