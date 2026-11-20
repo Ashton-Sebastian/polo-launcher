@@ -14,8 +14,8 @@ import org.json.JSONObject;
  *  rf  = since refuelling (reset when the fuel level jumps up by 3+ litres)
  *  lt  = long-term      (since Polo Launcher first saw the car; reset from the Vehicle screen)
  *
- * Fuel is reported in whole litres, so consumption is shown once at least 1 litre has been used
- * and gets more accurate the further you drive.
+ * Fuel is reported in whole litres, so consumption is shown once at least 1 litre has been used and 30 km
+ * driven, and gets more accurate the further you drive.
  */
 class TripComputer {
     private static final String[] M = {"ss", "day", "rf", "lt"};
@@ -23,6 +23,7 @@ class TripComputer {
     // Calibrated to the car's own range reading: 250 km with 22 l in the tank (17 Nov 2026) = 11.4 km/l.
     private static final double ESTIMATE_KML = 250.0 / 22.0;
     private static final long NEW_START_AFTER_MS = 2 * 60 * 1000;
+    private static final double MIN_CONSUMPTION_KM = 30;
 
     private final SharedPreferences p;
     private long lastTick;
@@ -115,7 +116,9 @@ class TripComputer {
                 out.put(m + "_distance_km", dist);
                 out.put(m + "_time_min", min);
                 if (min >= 1 && dist > 0) out.put(m + "_avg_speed_kmh", dist / (min / 60.0));
-                if (used >= 1 && dist > 0) {
+                // the car reports fuel in whole litres: over a short distance one litre step gives nonsense
+                // (e.g. 33 l/100 km after 3 km), so only show consumption once 30 km have been driven
+                if (used >= 1 && dist >= MIN_CONSUMPTION_KM) {
                     double kml = dist / used;
                     out.put(m + "_consumption_kml", kml);
                     if ((m.equals("rf") || m.equals("lt")) && used >= 3 && Double.isNaN(bestKml)) bestKml = kml; // rf first, then lt
