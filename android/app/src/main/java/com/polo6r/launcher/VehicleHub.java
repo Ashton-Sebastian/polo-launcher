@@ -58,6 +58,7 @@ public class VehicleHub {
                 boolean on = Intent.ACTION_SCREEN_ON.equals(i.getAction());
                 screenOn = on;
                 trip.onScreen(on);
+                if (on) CanBridge.safetyStop = false;
                 if (on && can != null) can.onCarOn();
                 if (on) HomeRedirectService.ensureEnabled(c); // turns the fix back on if allowed (it then shows the logo)
             }
@@ -65,11 +66,12 @@ public class VehicleHub {
         IntentFilter sf = new IntentFilter(Intent.ACTION_SCREEN_ON);
         sf.addAction(Intent.ACTION_SCREEN_OFF);
         ctx.registerReceiver(screenRx, sf);
-        // every 2 s while the car is on: update the trip computer even if nothing changed (time keeps running),
-        // and every 4 s ask the unit for the battery voltage. Nothing is ever sent to the CAN box.
+        // every 2 s while the car is on: ask the CAN box for car data (Car Info's pace), update the trip computer
+        // even if nothing changed (time keeps running); every 4 s ask the unit for the battery voltage
         ticker.postDelayed(new Runnable() {
             @Override public void run() {
                 if (screenOn) {
+                    if (can != null) can.requestCarData();
                     if (tickCount++ % 2 == 0) { try { ctx.sendBroadcast(new Intent(ACT_QUERY_VOLT)); } catch (Exception ignored) { } }
                     JSONObject m = lastMapped;
                     if (m != null) push(m);

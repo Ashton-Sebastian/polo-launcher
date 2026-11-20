@@ -830,6 +830,7 @@ function render() {
   $('#vehicle').classList.toggle('demo', !live && !!demoT);
   renderDoors();
   renderBrake();
+  renderFuelWarn();
 }
 
 /* ---------------- doors ---------------- */
@@ -858,6 +859,18 @@ const BRAKE_SVG = '<svg viewBox="0 0 46 38" fill="none" stroke="#ff4433" stroke-
   '<circle cx="23" cy="19" r="12"/>' +
   '<path d="M8 6 A18 18 0 0 0 8 32"/><path d="M38 6 A18 18 0 0 1 38 32"/>' +
   '<path d="M19.5 26 V12 h5 a4.2 4.2 0 0 1 0 8.4 h-5" stroke-linejoin="round"/></svg>';
+// VW low fuel light: amber fuel pump, on while the car's own low-fuel warning is on
+const FUEL_WARN_SVG = '<svg viewBox="0 0 34 38" fill="none" stroke="#ffb020" stroke-width="2.6" stroke-linejoin="round" stroke-linecap="round">' +
+  '<rect x="4" y="5" width="15" height="28" rx="2"/><path d="M4 15h15"/><path d="M2 33h19"/>' +
+  '<path d="M19 12l6 4v12a2.5 2.5 0 0 0 5 0V14l-4-5"/></svg>';
+function renderFuelWarn() {
+  // the car's warning when it sends one; otherwise the reserve level (about 7 l on a Polo 6R)
+  const on = V.fuel_low != null ? V.fuel_low === 1 : (V.fuel_litres != null && V.fuel_litres <= 7);
+  const el = $('#fuelWarnIcon');
+  el.classList.toggle('show', on);
+  el.innerHTML = on ? FUEL_WARN_SVG : '';
+}
+
 function renderBrake() {
   const on = V.handbrake === 1;
   const el = $('#brakeIcon');

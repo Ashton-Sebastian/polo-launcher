@@ -98,11 +98,49 @@ class CanBridge {
 
 
     /*
-     * Polo Launcher must never write to the CAN box itself. Versions 2.9-3.4 sent their own data requests on the CAN
-     * box's serial port (/dev/ttyS4). The CAN box answers every message with an FF acknowledgement, so extra traffic
-     * from a second app knocks Car Info's message handling out of step: that caused the "Can device is abnormal"
-     * warnings and lost steering-wheel buttons (Nov 2026). We only listen to what Car Info passes on.
+     * The CAN box only sends car data while it is asked for it, and Car Info only asks while its Status page is open.
+     * So we ask the same way Car Info does: 2E 90 02 41 0N CS (N = 1..3, CS = FF - (90+02+41+N)) on the CAN box's
+     * serial port, at Car Info's own pace (every 2 s), never while Car Info is in front (it asks itself then), and we
+     * stop for the rest of the drive if CAN Help shows its "Can device is abnormal" warning (safety stop).
      */
+    private static final String CAN_PORT = "/dev/ttyS4";
+    private static final int DATA_CAR_INFO = 0x41;
+    private java.io.FileDescriptor port;
+    private int reqLogs = 0;
+    private final android.os.HandlerThread reqThread = new android.os.HandlerThread("can-req");
+    private Handler req;
+    static volatile boolean safetyStop;      // set when CAN Help warns; cleared at the next car start
+    static volatile boolean carInfoInFront;  // Car Info is on screen and asking by itself
+
+    private static byte[] requestFrame(int part) {
+        int sum = (0x90 + 0x02 + DATA_CAR_INFO + part) & 0xFF;
+        return new byte[]{0x2E, (byte) 0x90, 0x02, (byte) DATA_CAR_INFO, (byte) part, (byte) (0xFF - sum)};
+    }
+
+    /** Ask the CAN box for fresh car data (called every 2 s while the car is on). */
+    void requestCarData() {
+        if (safetyStop || carInfoInFront) return;
+        if (req == null) { reqThread.start(); req = new Handler(reqThread.getLooper()); }
+        req.post(() -> {
+            try {
+                if (port == null) port = android.system.Os.open(CAN_PORT,
+                        android.system.OsConstants.O_WRONLY | android.system.OsConstants.O_NOCTTY | android.system.OsConstants.O_NONBLOCK, 0);
+                for (int part = 1; part <= 3; part++) {
+                    byte[] f = requestFrame(part);
+                    android.system.Os.write(port, f, 0, f.length);   // one whole frame per write
+                }
+                if (reqLogs++ < 3) Log.i(TAG, "asked the CAN box for car data");
+            } catch (Throwable t) {
+                if (reqLogs++ < 10) Log.w(TAG, "CAN request failed", t);
+                if (port != null) { try { android.system.Os.close(port); } catch (Exception ignored) { } port = null; }
+            }
+        });
+    }
+
+    static void onCanWarning() {
+        if (!safetyStop) Log.w(TAG, "CAN Help warned: no more CAN requests until the next car start");
+        safetyStop = true;
+    }
 
     /** The car was switched on: make sure we are still connected to Car Info (it can be restarted while the car is off). */
     void onCarOn() {
@@ -275,6 +313,8 @@ class CanBridge {
         putIf(m, "range_km", r, "mCanDriverMileage");    // range, if the adapter ever sends it
         putIf(m, "coolant_c", r, "mWaterTemp");
         putIf(m, "battery_v", r, "mBatteryVoltage");
+        // the car's own low-fuel warning light (left out = off)
+        m.put("fuel_low", r.optInt("mOilLowWarning", 0) == 1 ? 1 : 0);
         if (r.has("mHandbrake")) m.put("handbrake", r.getInt("mHandbrake") == HANDBRAKE_ON ? 1 : 0);
         // trip computer memories 1/2/3 = since start / since refuelling / long-term
         String[] p = {"ss", "rf", "lt"};

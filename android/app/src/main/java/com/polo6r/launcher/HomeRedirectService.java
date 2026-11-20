@@ -110,6 +110,8 @@ public class HomeRedirectService extends AccessibilityService {
         if (e.getEventType() != AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED || e.getPackageName() == null) return;
         String pkg = e.getPackageName().toString();
         String cls = e.getClassName() == null ? "" : e.getClassName().toString();
+        if (!pkg.equals("com.android.systemui")) CanBridge.carInfoInFront = pkg.equals("com.nwd.can.setting");
+        if (pkg.equals("com.nwd.can.help")) CanBridge.onCanWarning(); // its "Can device is abnormal" screen
         if (pkg.equals(getPackageName()) || pkg.equals("com.android.systemui")) return;
 
         if (!pkg.equals(lastPkg)) {
