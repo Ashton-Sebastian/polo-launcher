@@ -38,6 +38,7 @@ public class MainActivity extends Activity {
         instance = this;
         webReadyAt = 0;
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN);
+        if (!isUnlocked(this)) { waitForUnlock(); return; }
 
         WebView.setWebContentsDebuggingEnabled(true); // lets us inspect it over adb (chrome://inspect)
         web = new WebView(this);
@@ -84,6 +85,48 @@ public class MainActivity extends Activity {
         radio.start();
         updater.schedule();
         hideSystemBars();
+    }
+
+    static boolean isUnlocked(android.content.Context c) {
+        android.os.UserManager um = (android.os.UserManager) c.getSystemService(android.content.Context.USER_SERVICE);
+        return um == null || um.isUserUnlocked();
+    }
+
+    /*
+     * The unit's firmware starts its launcher very early, before Android has unlocked its storage. The web view can't
+     * start then ("the child service doesn't exist") and settings can't be read, which made Polo Launcher crash 4 times
+     * on every restart; each crash made Android drop it as the Home app and left the Home button service stuck.
+     * So until the unit is unlocked we only show the VW logo, then build the real screen.
+     */
+    private android.content.BroadcastReceiver unlockRx;
+
+    private void waitForUnlock() {
+        android.widget.FrameLayout root = new android.widget.FrameLayout(this);
+        root.setBackgroundColor(Color.rgb(0, 6, 16));
+        android.widget.ImageView logo = new android.widget.ImageView(this);
+        logo.setImageResource(R.drawable.ic_launcher);
+        int d = (int) (Math.min(getResources().getDisplayMetrics().widthPixels, getResources().getDisplayMetrics().heightPixels) * 0.46f);
+        root.addView(logo, new android.widget.FrameLayout.LayoutParams(d, d, android.view.Gravity.CENTER));
+        setContentView(root);
+        hideSystemBars();
+        unlockRx = new android.content.BroadcastReceiver() {
+            @Override public void onReceive(android.content.Context c, Intent i) { startAfterUnlock(); }
+        };
+        registerReceiver(unlockRx, new android.content.IntentFilter(Intent.ACTION_USER_UNLOCKED));
+        // in case the broadcast is missed: check every second
+        root.postDelayed(new Runnable() {
+            @Override public void run() { if (isUnlocked(MainActivity.this)) startAfterUnlock(); else root.postDelayed(this, 1000); }
+        }, 1000);
+    }
+
+    private boolean restarting;
+
+    private void startAfterUnlock() {
+        if (restarting || isFinishing()) return;
+        restarting = true;
+        if (unlockRx != null) { try { unregisterReceiver(unlockRx); } catch (Exception ignored) { } unlockRx = null; }
+        firstStart = false; // the logo is already showing
+        getWindow().getDecorView().postDelayed(this::recreate, 800); // give the web view service a moment to come up
     }
 
     /** Reload the screens (after a screen update was downloaded). */
@@ -184,6 +227,7 @@ public class MainActivity extends Activity {
     @Override
     protected void onDestroy() {
         if (instance == this) instance = null;
+        if (unlockRx != null) { try { unregisterReceiver(unlockRx); } catch (Exception ignored) { } unlockRx = null; }
         if (hub != null) hub.stop();
         if (radio != null) radio.stop();
         if (web != null) web.destroy();

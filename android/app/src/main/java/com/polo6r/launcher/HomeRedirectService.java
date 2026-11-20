@@ -90,8 +90,19 @@ public class HomeRedirectService extends AccessibilityService {
         extraPkgs.addAll(prefs(this).getStringSet(KEY_EXTRA, new HashSet<>()));
     }
 
+    /**
+     * Kept in device storage (readable right after a restart, before Android unlocks), because the unit starts this
+     * service that early. Moved over once from the old location.
+     */
     static SharedPreferences prefs(Context c) {
-        return c.getSharedPreferences(PREFS, MODE_PRIVATE);
+        Context dp = c.createDeviceProtectedStorageContext();
+        SharedPreferences p = dp.getSharedPreferences(PREFS, MODE_PRIVATE);
+        if (!p.getBoolean("_moved", false) && MainActivity.isUnlocked(c)) {
+            try { dp.moveSharedPreferencesFrom(c, PREFS); } catch (Exception ignored) { }
+            p = dp.getSharedPreferences(PREFS, MODE_PRIVATE);
+            p.edit().putBoolean("_moved", true).apply();
+        }
+        return p;
     }
 
     @Override
